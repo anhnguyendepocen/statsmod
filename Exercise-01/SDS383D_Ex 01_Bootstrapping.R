@@ -33,14 +33,22 @@ beta_cov_boot = function(X,y,B){
 	#Matrix to hold each beta bootstrap sample.  Each row is a sample. Each col is a beta_j.
 	betahat_boot = matrix(0,nrow=B,ncol=p)
 	
-	#Loop through bootstrap samples of rows of X and y.
+	#Pre-cache (X'X)^-1 X'
+	xtx_inv_xt = solve(t(X) %*% X) %*% t(X)
+	
+	#Fit model and obtain residuals, e.
+	beta_hat = xtx_inv_xt %*% y
+	yhat = X %*% beta_hat
+	e = y - yhat
+	
+	#NOTE: Bootstrapping the residuals only, as we want to treat X as fixed.
 	for (b in 1:B){
-		rows_boot = sample(1:n,n,replace=T)	#Resampled rows for X and y.
-		Xb = X[rows_boot,]
-		yb = y[rows_boot]	
+		samps = sample(1:n,n,replace=T)	#Select bootstrap indices.
+		e_boot = e[samps]				#Sample residuals.
+		y_boot = yhat + e_boot			#Bootstrapped y values.
 		
-		#Beta_hat estimate of least-squares coefficients.
-		betahat_boot[b,] = solve(t(Xb) %*% Xb) %*% t(Xb) %*% yb
+		#Calculate bootstrapped beta coefficients.
+		betahat_boot[b,] = xtx_inv_xt %*% y_boot
 	}
 	
 	#Estimate cov matrix using var(beta_i,beta_j) for all cols.  
@@ -89,6 +97,7 @@ mybetacov = beta_cov_boot(x,y,B=10000)
 
 #Display bootstrap estimate.
 round(mybetacov,2)	
+
 
 #Display the parametric normal theory estimate.
 round(betacovlm,2)
