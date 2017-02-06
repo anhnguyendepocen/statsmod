@@ -236,13 +236,13 @@ sig_boot_mean = apply(sig_boot,c(1,2),mean)
 
 #Plot outputs of each parameter to observe sampling distribution.
 #d=2, so two mu params, and four sigma params.
-jpeg('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-01/R Files/boot_mu.jpg')
+pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-01/R Files/boot_mu.pdf')
 par(mfrow=c(1,2))
 hist(mu_boot[1,])
 hist(mu_boot[2,])
 dev.off()
 
-jpeg('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-01/R Files/boot_sigma.jpg')
+pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-01/R Files/boot_sigma.pdf')
 par(mfrow=c(2,2))
 hist(sig_boot[1,1,])
 hist(sig_boot[1,2,])
