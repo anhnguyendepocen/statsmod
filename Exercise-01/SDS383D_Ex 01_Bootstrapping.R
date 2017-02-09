@@ -34,10 +34,11 @@ beta_cov_boot = function(X,y,B){
 	betahat_boot = matrix(0,nrow=B,ncol=p)
 	
 	#Pre-cache (X'X)^-1 X'
-	xtx_inv_xt = solve(t(X) %*% X) %*% t(X)
+	XtX = crossprod(X)
+	XtXinv = solve(XtX)
 	
 	#Fit model and obtain residuals, e.
-	beta_hat = xtx_inv_xt %*% y
+	beta_hat = XtXinv %*% t(X) %*% y
 	yhat = X %*% beta_hat
 	e = y - yhat
 	
@@ -48,22 +49,11 @@ beta_cov_boot = function(X,y,B){
 		y_boot = yhat + e_boot			#Bootstrapped y values.
 		
 		#Calculate bootstrapped beta coefficients.
-		betahat_boot[b,] = xtx_inv_xt %*% y_boot
+		betahat_boot[b,] = XtXinv %*% t(X) %*% y_boot
 	}
 	
 	#Estimate cov matrix using var(beta_i,beta_j) for all cols.  
-	#(Each col is a vector of B beta_j estimates.)
-	beta_hat_cov = matrix(0,nrow=p,ncol=p)
-	
-	#Set up list of matrix indices.
-	idx = expand.grid(1:p,1:p)
-	
-	for (i in 1:10){
-		for (j in 1:10){
-			#Calculate covar entry.
-			beta_hat_cov[i,j] = cov(betahat_boot[,i], betahat_boot[,j])
-		} #end j loop
-	} #end i loop
+	beta_hat_cov = cov(betahat_boot)
 
 	return(beta_hat_cov)	
 } #END FUNCTION
@@ -105,7 +95,7 @@ round(betacovlm,2)
 #-------------------------------------------------------------------
 ### Bootstrapping Part B - 1
 
-mvn_simulate = function(mu,Sigma){
+mvn_simulate = function(n,mu,Sigma){
 	#PURPOSE: Simulates mvn random variables given a mean mu and cov Sigma.
 	#This function returns a single X ~ MVN(mu,Sigma) realization.
 
@@ -120,10 +110,11 @@ mvn_simulate = function(mu,Sigma){
 	
 	#INPUTS: 	mu = desired vector of means.  Must be length p.
 	#			Sigma = desired covariance matrix.  Must be (pxp), symmetric, pos semidef.
-	#OUTPUTS: 	x = a realization from MVN(mu,Sigma)
+	#			n = number of mvn random variables to generate.
+	#OUTPUTS: 	x = a matrix of realizations from MVN(mu,Sigma).  (Each x is a column.)
 	
 	p = length(mu)		#Set length of mu vector.
-	z = rnorm(p,0,1)	#Generate p iid standard normals z_i.
+	z = matrix(rnorm(n*p,0,1),nrow=p,ncol=n)	#Generate p iid standard normals z_i for each realization.
 	
 	#Compute L using spectral value decomposition.  V %*% lam %*% solve(V)
 	#(See notes below.  Cholesky is 3x faster, spectral is more stable.)
@@ -134,15 +125,27 @@ mvn_simulate = function(mu,Sigma){
 	
 	L = V %*% sqrt(lam)			#Assign L so LL^T = Sigma	
 
-	#Compute realization of x ~ mvn(mu,Sigma)
-	x = L %*% z + mu
+	#Compute realizations of x ~ mvn(mu,Sigma)
+	#x = L %*% z + mu
+	x = apply(z,2,function(a) L %*% a + mu)
+
 	return(x)
 }
 
 #Test it out:
 mu = c(2,5)
 Sigma = matrix(c(10,3,3,2),2,2)
-x = mvn_simulate(mu,Sigma)
+x = mvn_simulate(10000,mu,Sigma)
+
+rowMeans(x)
+
+Sigma_hat = matrix(c(
+var(x[1,]),
+cov(x[1,],x[2,]),
+cov(x[1,],x[2,]),
+var(x[2,])),byrow=T,nrow=2)
+
+Sigma_hat
 
 #-------------
 #NOTE: Doing LL^T decomposition using eigen() spectral decomposition,
@@ -192,7 +195,7 @@ mvn_mle_est = function(x){
 
 # Generate some simulated data to work with.
 library(MASS)
-n = 1000
+n = 100
 mu = c(4,7)
 Sigma <- matrix(c(10,3,3,2),2,2)
 x = mvrnorm(n=n,mu=mu,Sigma=Sigma)
