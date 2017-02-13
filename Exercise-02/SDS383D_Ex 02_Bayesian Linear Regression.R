@@ -52,9 +52,9 @@ abline(a=beta_hat[1], b=beta_hat[2],lwd=2,col='blue')
 L = diag(n)	#Begin with Lambda = I.
 
 m <- rep(0, p)
-d = .02
-eta = .02
-K = diag(c(.02,.02))
+d = .01
+eta = .01
+K = diag(c(.01,.01))
 
 #Precache X^T %*% L %*% X for use in hyperparameter calculation.
 XtLX = t(X) %*% L %*% X
@@ -70,7 +70,7 @@ eta_star = eta + t(y) %*% y + t(m) %*% K %*% m - t(m_star) %*% K_star %*% m_star
 beta_hat_post = m_star
 
 #Plot frequenstist and Bayesian lm results over data for comparison.
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-02/LaTeX Files/Figures/Freq_Bayes_LM_Compare.pdf')
+pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-02/Figures/Freq_Bayes_LM_Compare.pdf')
 plot(X[,2],y,pch=19,col='black',
 	main='Frequentist & Bayesian Linear Models',
 	xlab='Defense Spending',ylab='GDP Growth Rate')

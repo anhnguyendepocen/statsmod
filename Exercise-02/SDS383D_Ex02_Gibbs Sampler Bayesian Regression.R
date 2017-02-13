@@ -41,7 +41,7 @@ gibbs = function(iter=11000,burn=1000,thin=2){
 		# part of mat instead of storing list of matrices.
 		
 	#Initialize each element of chain.
-	lambda = rep(1,n)
+	lambda = rep(.1,n)
 	beta = rep(0,p)
 	omega = 1
 	
@@ -96,11 +96,11 @@ p = ncol(X)
 
 #Initialize prior parameters.
 m <- rep(0, p)
-d = .1
-eta = .1
-K = diag(c(.5,.5))
+d = .01
+eta = .01
+K = diag(c(.01,.01))
 
-h = 1
+h = .01
 
 ### Run sampler to obtain samples from joint posterior p(beta,omega,lambda|y).
 output = gibbs(iter=11000,burn=1000,thin=2)
@@ -108,7 +108,7 @@ output = gibbs(iter=11000,burn=1000,thin=2)
 ### Analysis:
 
 #Plot beta_hat values to show chain stabilized.
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-02/LaTeX Files/Figures/Gibbs_beta_stabilized.pdf')
+pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-02/Figures/Gibbs_beta_stabilized.pdf')
 par(mfrow=c(2,1))
 plot(1:nrow(output),output[,1],type='l',main='Beta1 Chain',xlab='iter',ylab=expression(beta[1]))
 plot(1:nrow(output),output[,2],type='l',main='Beta2 Chain',xlab='iter',ylab=expression(beta[2]))
@@ -116,9 +116,16 @@ dev.off()
 
 #Posterior mean of beta.
 beta_post_mean = colMeans(output[,1:2])
+beta_post_mean
+
+#Omega posterior mean.
+mean(output[,3])
+
+mean(output[,3]) * 1/colMeans(output[,4:ncol(output)])
 
 #Posterior mean of sigma^2
-sigma2_post_mean = 1/mean(output[,2])
+sigma2_post_mean = 1/mean(output[,3])
+sigma2_post_mean
 
 ### Lambda_i precision plot.
 
@@ -129,13 +136,13 @@ lam_post_mean_inv = 1/colMeans(output[,4:ncol(output)])
 idx_outliers = which(lam_post_mean_inv >= sort(lam_post_mean_inv,decreasing=T)[5])
 country_outliers = as.character(data$CODE[idx_outliers])
 
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-02/LaTeX Files/Figures/Lambda_i_Inverse.pdf')
+pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-02/Figures/Lambda_i_Inverse.pdf')
 plot(1:n,lam_post_mean_inv,main= 'Posterior Mean of lambda for h=1',xlab='Countries',ylab=expression(1/lambda[i]))
 abline(h=sort(lam_post_mean_inv,decreasing=T)[5] - .05,col='blue') #Plots h-line below top 5 points.
 dev.off()
 
 #Heavy-tailed Bayesian regression line w outliers labeled.
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-02/LaTeX Files/Figures/Gibbs_HeavyTail_Bayes_LM.pdf')
+pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-02/Figures/Gibbs_HeavyTail_Bayes_LM.pdf')
 plot(X[,2],y,pch=19,col='black',xlab='Defense Spending',ylab='GDP Growth Rate',main='Heavy-Tailed Bayesian Regression Line (h=1)')
 abline(a=beta_post_mean[1], b=beta_post_mean[2],lwd=2,col='blue')
 points(X[idx_outliers,2],y[idx_outliers],pch=19,col='red')
@@ -150,12 +157,13 @@ dev.off()
 #How does choice h affect things?  Used h=1 previously.  Try a few different h values.
 
 #Look at 1/lambda_i precision plots for a variety of h values.
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-02/LaTeX Files/Figures/H_Compare.pdf')
+pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-02/Figures/H_Compare.pdf')
 par(mfrow=c(2,3))
 H = c(.01,.1,1,2,5,10)
 for (g in H){
 	h = g
 	output = gibbs(iter=11000,burn=1000,thin=2)
+	lam_post_mean_inv = 1/colMeans(output[,4:ncol(output)])
 	plot(1:n,lam_post_mean_inv,main= paste('Lambda Post. Mean, h=',h),xlab='Countries',ylab=expression(1/lambda[i]))
 	abline(h=sort(lam_post_mean_inv,decreasing=T)[5] - .01,col='blue') #Plots h-line below top 5 points.
 }
