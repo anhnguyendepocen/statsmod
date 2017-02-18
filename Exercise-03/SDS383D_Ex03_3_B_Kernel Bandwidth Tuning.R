@@ -23,7 +23,7 @@ options(xtable.floating = FALSE)
 options(xtable.timestamp = "")
 
 #Load functions.
-source('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/R Files/SDS383D_Ex3_R FUNCTIONS.R')
+source('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/R Files/SDS383D_Ex3_FUNCTIONS.R')
 
 #------------------------------------------------------------
 ### Data and function generation.
