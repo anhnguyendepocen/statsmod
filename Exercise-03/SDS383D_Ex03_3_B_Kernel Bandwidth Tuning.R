@@ -23,7 +23,7 @@ options(xtable.floating = FALSE)
 options(xtable.timestamp = "")
 
 #Load functions.
-source('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/R Files/SDS383D_Ex3_FUNCTIONS.R')
+source('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/RCode/SDS383D_Ex3_FUNCTIONS.R')
 
 #------------------------------------------------------------
 ### Data and function generation.
@@ -101,7 +101,7 @@ rownames(h_opt_mat) = c('wiggly','smooth')
 xtable(h_opt_mat,digits=3)	#Output latex table.
 
 #Plot output with fitted data using optimal h values.
-pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/Figures/Bandwidth_selection.pdf')
+#pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/Figures/Bandwidth_selection.pdf')
 par(mfrow=c(2,2))
 for (i in 1:4){
 	#Scatterplot of test x/y.
@@ -112,6 +112,61 @@ for (i in 1:4){
 	idx = sort(x_star, index.return = T)$ix
 	lines(sort(x_star),fx_hat[[i]][idx],col='red') #Fitted line.
 }
+#dev.off()
+
+#------------------------------------------------------------
+### CV PART C Script:  Find optimal bandwidths h for each
+### combination of wiggly/smooth and noisy/clear functions using
+### LOOCV.
+#------------------------------------------------------------
+
+# For each case, select a bandwidth parameter. (Used Gaussian kernel.)
+h_opt_loocv = rep(0,4)	#Vector to hold optimal h values.
+names(h_opt_loocv) = colnames(y)
+H = seq(.001,1,by=.001)	#Candidate h values.
+fx_hat_loocv = list()			#To hold estimated function values.
+
+#Iterate through each setup.
+for (i in 1:4){
+	
+	#Extract y column.
+	ytemp = y[,i]
+	
+	#Temp vector to hold prediction errors.
+	temp_pred_err = rep(0,length(H))
+	
+	for (j in 1:length(H)){ 
+		h = H[j]
+		results = tune_h_loocv(x=x,y=ytemp,K=K_gaussian,h=h)	
+		temp_pred_err[j] = results$loocv_err
+	}
+
+	h_opt_loocv[i] = H[which.min(temp_pred_err)]
+	fx_hat_loocv[[i]] = tune_h_loocv(x,ytemp,K=K_gaussian,h_opt_loocv[i])$yhat
+}
+
+#Sanity check
+cbind(y[,4],fx_hat_loocv[[4]])
+
+#------------------------------------------------------------
+### Output results as table and plot.
+
+#Format optimal h results as matrix.
+h_opt_mat_loocv = matrix(h_opt_loocv,nrow=2,byrow=T)
+colnames(h_opt_mat_loocv) = c('noisy','clear')
+rownames(h_opt_mat_loocv) = c('wiggly','smooth')
+xtable(h_opt_mat_loocv,digits=3)	#Output latex table.
+
+#Plot output with fitted data using optimal h values.
+pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/Figures/Bandwidth_selection_loocv.pdf')
+par(mfrow=c(2,2))
+for (i in 1:4){
+	#Scatterplot of test x/y.
+	plot(x,y[,i],
+		main=paste(names(h_opt_loocv)[i],", h=",h_opt_loocv[i],sep=''),
+		xlab='x',ylab='y')	
+	#Overlay estimated fit.
+	idx = sort(x, index.return = T)$ix
+	lines(sort(x),fx_hat_loocv[[i]][idx],col='red') #Fitted line.
+}
 dev.off()
-
-

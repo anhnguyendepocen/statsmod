@@ -87,3 +87,38 @@ tune_h = function(test,train,K,h){
 	#Return function outputs:
 	return(list(fhat_star=fhat_star, pred_err_test = pred_err_test))
 }
+
+tune_h_loocv = function(x,y,K,h){
+	#FUNCTION: 	Function to use leave on out cross-validation to tune  
+	#				bandwidth h for specified test/train data sets and 
+	#				specified kernel K.
+	#INPUTS:	x = a scalar or vector; the dependent variable.
+	#			y = a scalar or vector; the independent var.  Same length as x.
+	#			K = the kernel function
+	#			h = a scalar or vector of bandwidths to try.
+	#OUTPUTS:	pred_err_test = prediction error for testing data for each h.
+	#			fhat_test = predicted values for testing data's x vals.
+	
+	#Define ppm H, the 'smoothing matrix'.  
+	# {H_ij} = 1/h * K((xi-xj*)/h)
+	#For loocv, x=x*, since calculating on single data set instead of test/train.
+	
+	Hat = matrix(0,nrow=length(x),ncol=length(x)) #Empty matrix.
+	
+	for (i in 1:length(x)){			#Loop through H rows.
+		for (j in 1:length(x)){		#Loop through H cols.
+			Hat[i,j] = (1/h) * K((x[j] - x[i])/h)	
+		} 	
+		#Normalize weights by dividing H by rowsums(H).						
+		Hat[i,] = Hat[i,] / sum(Hat[i,])
+	}
+	
+	#Calculate predicted values.
+	yhat = Hat %*% y
+	
+	#Calculate loocv prediction error.
+	loocv_err = sum(((y-yhat)/(1-diag(Hat)))^2)
+	
+	#Return function outputs:	
+	return(list(yhat=yhat,loocv_err=loocv_err))	
+}
