@@ -19,7 +19,7 @@
 rm(list=ls())
 
 #Load functions.
-source("/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/R Files/SDS383D_Ex3_FUNCTIONS.R")
+source("/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/RCode/SDS383D_Ex3_FUNCTIONS.R")
 
 #------------------------------------------------------------
 ### Data generation.
@@ -42,10 +42,10 @@ dev.off()
 
 #Set up a vector of x_star values, and estimate function value at these points.
 x_star = seq(min(x),max(x),by=.01)
-fhat_star = linear_smoother(x,y,x_star,h=.01,K=K_gaussian)
+yhat = linear_smoother(x,y,x_star,h=.01,K=K_gaussian)
 
 plot(x,y,main='Gaussian Kernel Smoother')
-lines(x_star,fhat_star,col='red')
+lines(x_star,yhat,col='red')
 
 #------------------------------------------------------------
 ### Plot linear smoothing output for various bandwidths.
@@ -61,16 +61,16 @@ par(mfrow=c(2,1))
 #Plot for a variety of bandwidths using Gaussian kernel.
 plot(x,y,main='Gaussian Kernel Smoother')
 for (i in 1:length(H)){
-	fhat_star = linear_smoother(x,y,x_star,h=H[i],K=K_gaussian)
-	lines(x_star,fhat_star,col=col[i],lwd=2)
+	yhat = linear_smoother(x,y,x_star,h=H[i],K=K_gaussian)
+	lines(x_star,yhat,col=col[i],lwd=2)
 }
 legend('topleft',legend=paste("h=",H,sep=''),lwd=2,lty=1,col=col,bg='white')
 
 #Plot for a variety of bandwidths using uniform kernel.
 plot(x,y,main='Uniform Kernel Smoother')
 for (i in 1:length(H)){
-	fhat_star = linear_smoother(x,y,x_star,h=H[i],K=K_uniform)
-	lines(x_star,fhat_star,col=col[i],lwd=2)
+	yhat = linear_smoother(x,y,x_star,h=H[i],K=K_uniform)
+	lines(x_star,yhat,col=col[i],lwd=2)
 }
 legend('topleft',legend=paste("h=",H,sep=''),lwd=2,lty=1,col=col,bg='white')
 
