@@ -67,7 +67,7 @@ colnames(y) = c('wiggly_noisy','wiggly_clear','smooth_noisy','smooth_clear')
 #------------------------------------------------------------
 ### Split each data set into train and test sets. (70-30)
 
-test_idx = sample(1:n,size=n*.3,replace=F)
+test_idx = sample(1:n,size=n*.35,replace=F)
 test = cbind(x[test_idx],y[test_idx,])
 train = cbind(x[-test_idx],y[-test_idx,])
 
@@ -97,7 +97,7 @@ for (i in 1:4){
 	}
 
 	h_opt[i] = H[which.min(temp_pred_err)]
-	yhat[[i]] = tune_h(te,tr,K=K_gaussian,h_opt[i])$fhat_star
+	yhat[[i]] = tune_h(te,tr,K=K_gaussian,h_opt[i])$yhat
 }
 
 #------------------------------------------------------------
@@ -131,7 +131,7 @@ dev.off()
 # For each case, select a bandwidth parameter. (Used Gaussian kernel.)
 h_opt_loocv = rep(0,4)				#Vector to hold optimal h values.
 names(h_opt_loocv) = colnames(y)
-H = seq(.001,1,by=.001)				#Candidate h values.
+H = seq(.001,1,by=.01)				#Candidate h values.
 yhat_loocv = list()				#To hold estimated function values.
 
 #Iterate through each setup.
