@@ -277,3 +277,177 @@ tune_h_local_poly_loocv = function(x,y,K,h){
 	
 	return(list(yhat=yhat,loocv_err=loocv_err))
 }
+
+#================================================================
+# Gaussian Processes ============================================
+#================================================================
+
+gaussian_process = function(x,mu,cov.fun,params){
+	#-------------------------------------------------------------
+	#FUNCTION: 	Generates realizations from the Gaussian Process on unit [0,1]
+	#			with mean zero, and the specified covariance matrix.
+	#-------------------------------------------------------------
+	#INPUTS: 	x = vector (x1,...,xn) on unit interval [0,1]
+	#			params = vector(b,tau1.sq,tau2.sq) of 3 hyperparameters,
+	#				where:
+	#				b = 
+	#				tau1.sq = 
+	#				tau2.sq = 
+	#			mu = vector of means, length n.
+	#			cov.fun = covariance matrix function.
+	#-------------------------------------------------------------
+	#OUTPUTS:	fx = vector of realizations from gaussian process.
+	#-------------------------------------------------------------
+	n = length(x)
+	
+	#Generate covariance matrix.
+	cov = make.covmatrix(x,cov.fun,params)
+	
+	#Generate realizations f(x1)...f(xn).
+	#Require the mvtnorm package for random normal generation.
+	#require(mvtnorm)
+	#fx = rmvnorm(1,mu,cov)
+	fx = my.rmvnorm(1,mu,cov)
+	return(fx)
+}
+
+l2norm = function(x){
+	#-------------------------------------------------------------
+	#FUNCTION: 	Calculates the Euclidean (l2) norm for a vector.
+	#-------------------------------------------------------------
+	#INPUTS: 	x = vector (x1,...,xn) 
+	#-------------------------------------------------------------
+	#OUTPUTS:	norm = l2 norm for vector x.
+	#-------------------------------------------------------------
+	return(norm=sqrt(sum(x^2)))
+}
+
+cov.se = function(x.i,x.j,params){
+	#-------------------------------------------------------------
+	#FUNCTION: 	Computes the (i,j) element for squared exponential cov matrix.
+	#-------------------------------------------------------------
+	#INPUTS:	x.i, x.j = two points from two vectors in same space.
+	#			params = vector(b,tau1.sq,tau2.sq) of 3 hyperparameters,
+	#				where:
+	#				b = 
+	#				tau1.sq = 
+	#				tau2.sq = 
+	#-------------------------------------------------------------
+	#OUTPUT:	cov = (i,j) element for squared exponential cov matrix.
+	#-------------------------------------------------------------
+	
+	#Check for valid hyperparameters.
+	if(length(params)!=3 || prod(is.na(params))){
+		return('Enter three valid hyperparameters in param vector.')
+	}
+	
+	#Extract elements of triplet.
+	b = params[1]
+	tau1.sq = params[2]
+	tau2.sq = params[3]
+	
+	#Kronecker delta function.
+	kd = function(a,b) (a==b)
+	
+	#Euclidean distance for x.i, x.j.
+	ed = l2norm(x.i-x.j)
+	
+	#Caluclate cov function value.
+	cov = tau1.sq * exp(-.5 * (ed/b)^2) + tau2.sq * kd(x.i,x.j)	
+	
+	#Return function output.
+	return(cov)	
+}	
+
+cov.m52 = function(x.i,x.j,params){
+	#-------------------------------------------------------------
+	#FUNCTION: 	Computes the (i,j) element for Matern 5/2 cov matrix.
+	#-------------------------------------------------------------
+	#INPUTS:	x.i, x.j = two points from two vectors in same space.
+	#			params = vector(b,tau1.sq,tau2.sq) of 3 hyperparameters,
+	#				where:
+	#				b = 
+	#				tau1.sq = 
+	#				tau2.sq = 
+	#-------------------------------------------------------------
+	#OUTPUT:	cov = (i,j) element for Matern 5/2 cov matrix.
+	#-------------------------------------------------------------
+	#Check for valid hyperparameters.
+	if(length(params)!=3 || prod(is.na(params))){
+		return('Enter three valid hyperparameters in param vector.')
+	}
+	
+	#Extract elements of triplet.
+	b = params[1]
+	tau1.sq = params[2]
+	tau2.sq = params[3]
+
+	#Kronecker delta function.
+	kd = function(a,b) (a==b)
+	
+	#Euclidean distance for x.i, x.j.
+	ed = l2norm(x.i-x.j)
+	
+	#Caluclate cov function value.
+	cov = tau1.sq * ( 1 + (sqrt(5)*ed / b) + (5/3 * (ed/b)^2)) * exp(-sqrt(5) * ed / b)  + tau2.sq * kd(x.i,x.j)
+	
+	#Return function output.
+	return(cov)	
+} 
+
+make.covmatrix = function(x,cov.fun,params=NA){
+	#-------------------------------------------------------------
+	#FUNCTION: Assemble covariance matrix for a Gaussian Process w specified cov. function.
+	#-------------------------------------------------------------
+	#INPUTS:	x.i, x.j = two points from two vectors in same space.
+	#			params = vector(b,tau1.sq,tau2.sq) of 3 hyperparameters,
+	#				where:
+	#				b = 
+	#				tau1.sq = 
+	#				tau2.sq = 	
+	#-------------------------------------------------------------
+	#OUTPUTS:
+	#-------------------------------------------------------------
+	#Check for valid hyperparameters.
+	if(length(params)!=3 || prod(is.na(params))){
+		return('Enter three valid hyperparameters in param vector.')
+	}
+	
+	n = length(x)
+	covmatrix = matrix(nrow=n,ncol=n)
+	
+	for (i in 1:n){
+		for (j in 1:n)
+			covmatrix[i,j] = cov.fun(x[i],x[j],params)
+			covmatrix[j,i] = covmatrix[i,j]
+	}
+	return(covmatrix)
+}
+
+#NOT USED: Alternative to rmvnorm:
+my.rmvnorm = function(n,mu,Sigma){
+	#-------------------------------------------------------------
+	#FUNCTION: Simulates mvn random variables given a mean mu and cov Sigma. (From Ex 1 - Bootstrap)
+	#This function returns n X ~ MVN(mu,Sigma) realization.
+	#-------------------------------------------------------------
+	#INPUTS: 	mu = desired vector of means.  Must be length p.
+	#			Sigma = desired covariance matrix.  Must be (pxp), symmetric, pos semidef.
+	#			n = number of mvn random variables to generate.
+	#-------------------------------------------------------------
+	#OUTPUTS: 	x = a matrix of realizations from MVN(mu,Sigma).  (Each x is a column.)
+	#-------------------------------------------------------------
+	p = length(mu)		#Set length of mu vector.
+	z = matrix(rnorm(n*p,0,1),nrow=p,ncol=n)	#Generate p iid standard normals z_i for each realization
+	
+	eg = eigen(Sigma)			#Store spectoral value decomposition of Sigma.
+	V = eg$vectors				#Extract eigen vectors.
+	lam = diag(eg$values)		#Extract diagonal matrix of eigenvalues.
+	
+	L = V %*% sqrt(lam)			#Assign L so LL^T = Sigma	
+
+	#Compute realizations of x ~ mvn(mu,Sigma)
+	#x = L %*% z + mu
+	x = apply(z,2,function(a) L %*% a + mu)
+
+	return(x)
+}
