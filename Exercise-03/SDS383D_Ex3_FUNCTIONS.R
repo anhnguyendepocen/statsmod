@@ -284,8 +284,8 @@ tune_h_local_poly_loocv = function(x,y,K,h){
 
 gaussian_process = function(x,mu,cov.fun,params){
 	#-------------------------------------------------------------
-	#FUNCTION: 	Generates realizations from the Gaussian Process on unit [0,1]
-	#			with mean zero, and the specified covariance matrix.
+	#FUNCTION: 	Generates realizations from the Gaussian Process 
+	#			with specified mean and covariance matrix.	
 	#-------------------------------------------------------------
 	#INPUTS: 	x = vector (x1,...,xn) on unit interval [0,1]
 	#			params = vector(b,tau1.sq,tau2.sq) of 3 hyperparameters,
@@ -301,7 +301,7 @@ gaussian_process = function(x,mu,cov.fun,params){
 	n = length(x)
 	
 	#Generate covariance matrix.
-	cov = make.covmatrix(x,cov.fun,params)
+	cov = make.covmatrix(x,x,cov.fun,params)
 	
 	#Generate realizations f(x1)...f(xn).
 	#Require the mvtnorm package for random normal generation.
@@ -309,6 +309,48 @@ gaussian_process = function(x,mu,cov.fun,params){
 	#fx = rmvnorm(1,mu,cov)
 	fx = my.rmvnorm(1,mu,cov)
 	return(fx)
+}
+
+gp_predict = function(x,y,x.new,mu,cov.fun,params,sig2=0){
+	#-------------------------------------------------------------
+	#FUNCTION: 	Generates predictions from the noisy Gaussian Process 
+	#			with specified mean and covariance matrix.
+	#			Model: y = f(x) + e, with e ~ N(0,sig2*I)
+	#-------------------------------------------------------------
+	#INPUTS: 	x = vector (x1,...,xn) 
+	#			y = observed GP values at each x.  Can be noisy, or not.
+	#			params = vector(b,tau1.sq,tau2.sq) of 3 hyperparameters,
+	#				where:
+	#				b = 
+	#				tau1.sq = 
+	#				tau2.sq = 
+	#			mu = vector of means, length n.
+	#			cov.fun = covariance matrix function.
+	#			sig2 = variance for noise. 0 predicts for a non-noisy GP.
+	#-------------------------------------------------------------
+	#OUTPUTS:	post.mean = Posterior mean E(f.new|y) 
+	#			post.var = Posterior variance Var(f.new|y)
+	#-------------------------------------------------------------
+	
+	n = length(x)
+	n.new = length(x.new)
+	
+	y.rep = matrix(rep(y,n.new),ncol=n.new,byrow=F)
+	
+	#Set up partitioned cov matrices.
+	C	= make.covmatrix(x,x,cov.fun,params)
+	Cx	= make.covmatrix(x,x.new,cov.fun,params)
+	CxT	= t(Cx)
+	Cxx	= make.covmatrix(x.new,x.new,cov.fun,params)
+	
+	#Add noise matrix.  (Will be zeros if sig2=0.)
+	noise = sig2 * diag(n)
+	
+	#Calculate posterior means and vars for each predicted value.
+	post.mean = t(Cx) %*% solve(C + noise) %*% y
+	post.var = diag(Cxx + CxT %*% solve(C + noise) %*% Cx)
+	
+	return(list(post.mean=post.mean,post.var=post.var))	
 }
 
 l2norm = function(x){
@@ -395,7 +437,7 @@ cov.m52 = function(x.i,x.j,params){
 	return(cov)	
 } 
 
-make.covmatrix = function(x,cov.fun,params=NA){
+make.covmatrix = function(x,y,cov.fun,params=NA){
 	#-------------------------------------------------------------
 	#FUNCTION: Assemble covariance matrix for a Gaussian Process w specified cov. function.
 	#-------------------------------------------------------------
@@ -413,13 +455,13 @@ make.covmatrix = function(x,cov.fun,params=NA){
 		return('Enter three valid hyperparameters in param vector.')
 	}
 	
-	n = length(x)
-	covmatrix = matrix(nrow=n,ncol=n)
+	n1 = length(x)
+	n2 = length(y)
+	covmatrix = matrix(nrow=n1,ncol=n2)
 	
-	for (i in 1:n){
-		for (j in 1:n)
-			covmatrix[i,j] = cov.fun(x[i],x[j],params)
-			covmatrix[j,i] = covmatrix[i,j]
+	for (i in 1:n1){
+		for (j in 1:n2)
+			covmatrix[i,j] = cov.fun(x[i],y[j],params)
 	}
 	return(covmatrix)
 }

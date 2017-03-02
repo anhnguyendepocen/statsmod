@@ -21,9 +21,24 @@ utilities = read.csv('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/statsm
 x = utilities$temp								#average temp.
 y = utilities$gasbill / utilities$billingdays	#avg daily bill
 
-#Center variables
-x = x - mean(x)
-y = y - mean(y)
+#================================================================
+# Analysis of Residuals: ========================================
+#================================================================
+
+#Fit D=1 local polynomial model (local linear) using optimal h.
+#Inspect residuals.  Does homoscedasticity look reasonable?  If not, propose fix.
+h=6.9
+yhat = local_linear_smoother(x,y,x,h=h,K_gaussian)$yhat
+yhat_log = local_linear_smoother(x,log(y),x,h=h,K_gaussian)$yhat
+resids = (y-yhat)
+resids_log = (log(y)-yhat_log)
+
+### Plotting
+pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/Figures/Local_Linear_Residuals.pdf',height=6,width=12)
+par(mfrow=c(1,2))
+plot(x,resids,main=paste('Y: Local Linear Smoothing Residuals, Gaussian Kernel, h = ',sep="",h))
+plot(x,resids_log,main=paste('LOG(Y): Local Linear Smoothing Residuals, Gaussian Kernel, h = ',sep="",h))	
+dev.off()
 
 #================================================================
 # Local Linear Smoother: Optimize bandwidth h using loocv =======
@@ -44,7 +59,8 @@ for (m in 1:length(H)){
 
 #Select optimal h and obtain fitted values.
 h_opt = H[which.min(pred_err)]
-yhat = local_linear_smoother(x,y,x,h=h_opt,K_gaussian)$yhat
+yhat = local_poly_smoother(x,y,x,h=h_opt,K_gaussian,D=1)$yhat
+
 
 #------------------------------------------------------------
 ### Plot output with fitted data using optimal h value.
@@ -61,48 +77,41 @@ idx = sort(x_star, index.return = T)$ix
 
 dev.off()
 
-#================================================================
-# Analysis of Residuals: ========================================
-#================================================================
-
-#Fit D=1 local polynomial model (local linear) using optimal h.
-#Inspect residuals.  Does homoscedasticity look reasonable?  If not, propose fix.
-
-yhat = local_linear_smoother(x,y,x,h=h_opt,K_gaussian)$yhat
-resids = (y-yhat)
-
-### Plotting
-pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/Figures/Local_Linear_Residuals.pdf')
-plot(x,resids,main=paste('Local Linear Smoothing Residuals, Gaussian Kernel, h = ',sep="",h_opt))	
-dev.off()
-
-#Looks like residuals follows a trend.  
-#Try an Anscombe variance stabilizing transformation of y to fix this.  
-#Or other appropriate var stabilizing transforms.
 
 #================================================================
 # Confidence Bands: =============================================
 #================================================================
+#sigma2 for CI band calculation.  Need Var(f*(x)).
 RSS = sum(resids^2)
 sigma2_hat = RSS / (length(yhat)-1)
 
-lb = yhat - 1.96*sqrt(sigma2_hat)
-ub = yhat + 1.96*sqrt(sigma2_hat)
+#For confidence bands calculation. Other piece of Var(f*(x)).
+Hat = local_poly_smoother(x,y,x,h=h_opt,K_gaussian,D=1)$Hat 
+
+#Var(f*(x))
+var = rowSums(Hat^2) * sigma2_hat
+
+lb = yhat - 1.96*sqrt(var)
+ub = yhat + 1.96*sqrt(var)
 
 #Plot bands.
 pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/Figures/LLS_Conf_Bands.pdf')
 #Scatterplot of x/y.
 plot(x,y,main=paste('Local Lin Smoothing 95% Confidence Bands, h = ',sep="",h_opt))	
+	
+#Overlay confidence bands.
+lines(sort(x_star),lb[idx],col='blue',lwd=2,lty=2) 	
+lines(sort(x_star),ub[idx],col='blue',lwd=2,lty=2) 
+
+#Shade confidence bands.
+polygon(c(sort(x_star),rev(sort(x_star))),c(ub[idx],rev(lb[idx])),col='thistle',border=NA)
+points(x,y,main=paste('Local Lin Smoothing 95% Confidence Bands, h = ',sep="",h_opt))	
 
 #Overlay estimated fit.
 x_star=x
 idx = sort(x_star, index.return = T)$ix
 	lines(sort(x_star),yhat[idx],col='firebrick3',lwd=2) #Fitted line.
 	
-#Overlay confidence bands.
-lines(sort(x_star),lb[idx],col='blue',lwd=2,lty=2) 	
-lines(sort(x_star),ub[idx],col='blue',lwd=2,lty=2) 
-
 dev.off()	
 
 #================================================================

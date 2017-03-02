@@ -21,7 +21,7 @@ n=100
 x = sample(seq(0,1,.0001),n,replace=T)
 
 b = 1
-tau1.sq = 1e-5
+tau1.sq = .1
 tau2.sq = 1e-6
 triplet = c(b,tau1.sq,tau2.sq)
 
