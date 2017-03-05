@@ -1,6 +1,7 @@
 #Stats Modeling 2
 #Exercise 3
-#Gaussian Processes - Basics - Part A
+#GPs in Nonparametric regression & spatial smoothing
+
 
 #================================================================
 # Environment Setup & Data Load =================================
@@ -12,6 +13,52 @@ rm(list=ls())
 #Load functions.
 source('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/RCode/SDS383D_Ex3_FUNCTIONS.R')
 
+#Load data.
+utilities = read.csv('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/statsmod/Course-Data/utilities.csv',header=T)
+
+#Extract data for model.
+x = utilities$temp									#average temp.
+y = utilities$gasbill / utilities$billingdays		#avg daily bill
+n = length(x)
+
+#================================================================
+# Pointwise Posterior Mean & 95% CI for all observed xi =========
+#================================================================
+
+#Set up hyperparameters.
+b = 10
+tau1.sq = 5
+tau2.sq = 1e-6
+triplet = c(b,tau1.sq,tau2.sq)
+params=triplet
+
+#Run prediction with sigma2=1 to estimate residuals.
+pred = gp.predict(x,y,x.new=x,mu=rep(0,n),cov.fun=cov.se,params=triplet,sig2=1)
+sig2 = sum(y-pred$post.mean)^2/(n-1)
+
+#Rerun with estimated sigma2.
+pred = gp.predict(x,y,x.new=x,mu=rep(0,n),cov.fun=cov.se,params=triplet,sig2=2)
+
+#Vectors to hold posterior mean, var, and CI bounds.
+post.mean = pred$post.mean
+post.se = sqrt(pred$post.var)
+post.ci.lb = post.mean - 1.96*post.se
+post.ci.ub = post.mean + 1.96*post.se
+
+#Plotting:
+pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/Figures/6_C.pdf')
+x.new=x
+idx = sort(x.new, index.return = T)$ix
+plot(x,y,col='darkgrey',xlab='x',ylab='y',main='Utilities Data Posterior Mean and 95% CI')
+lines(x.new[idx],post.ci.lb[idx],col='red',lty=2)
+lines(x.new[idx],post.ci.ub[idx],col='red',lty=2)
+
+#Shade confidence bands.
+polygon(c(sort(x.new),rev(sort(x.new))),c(post.ci.ub[idx],rev(post.ci.lb[idx])),col='lightgrey',border=NA)
+points(x,y)
+lines(x.new[idx],post.mean[idx],col='blue')
+
+dev.off()
 #================================================================
 # Test Gaussian Process Function ================================
 #================================================================
@@ -21,7 +68,7 @@ n=100
 x = sample(seq(0,1,.0001),n,replace=T)
 
 b = 1
-tau1.sq = 1
+tau1.sq = 1e-5
 tau2.sq = 1e-6
 triplet = c(b,tau1.sq,tau2.sq)
 
@@ -30,14 +77,7 @@ x.m52 = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.m52)
 
 #Test plot.
 idx = sort(x, index.return = T)$ix
-plot(x[idx],x.se[idx],col='black',lwd=1,type='l',ylim=c(-3,3))
-
-#Plot a bunch.
-color=rainbow(10)
-for (i in 1:10){
-	x.se = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.se)
-	lines(x[idx],x.se[idx],lwd=1,col=color[i])
-}
+plot(x[idx],x.se[idx],col='blue',lwd=1,type='l')
 
 #================================================================
 # Hyperparameter Plotting for Sq Exp Cov Fctn GP ================

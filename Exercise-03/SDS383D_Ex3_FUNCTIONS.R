@@ -305,13 +305,12 @@ gaussian_process = function(x,mu,cov.fun,params){
 	
 	#Generate realizations f(x1)...f(xn).
 	#Require the mvtnorm package for random normal generation.
-	#require(mvtnorm)
-	#fx = rmvnorm(1,mu,cov)
-	fx = my.rmvnorm(1,mu,cov)
+	require(mvtnorm)
+	fx = rmvnorm(1,mu,cov,method='chol')
 	return(fx)
 }
 
-gp_predict = function(x,y,x.new,mu,cov.fun,params,sig2=0){
+gp.predict = function(x,y,x.new,mu,cov.fun,params,sig2=0){
 	#-------------------------------------------------------------
 	#FUNCTION: 	Generates predictions from the noisy Gaussian Process 
 	#			with specified mean and covariance matrix.
@@ -335,11 +334,9 @@ gp_predict = function(x,y,x.new,mu,cov.fun,params,sig2=0){
 	n = length(x)
 	n.new = length(x.new)
 	
-	y.rep = matrix(rep(y,n.new),ncol=n.new,byrow=F)
-	
 	#Set up partitioned cov matrices.
 	C	= make.covmatrix(x,x,cov.fun,params)
-	Cx	= make.covmatrix(x,x.new,cov.fun,params)
+	Cx	= make.covmatrix(x.new,x,cov.fun,params)
 	CxT	= t(Cx)
 	Cxx	= make.covmatrix(x.new,x.new,cov.fun,params)
 	
@@ -347,8 +344,8 @@ gp_predict = function(x,y,x.new,mu,cov.fun,params,sig2=0){
 	noise = sig2 * diag(n)
 	
 	#Calculate posterior means and vars for each predicted value.
-	post.mean = t(Cx) %*% solve(C + noise) %*% y
-	post.var = diag(Cxx + CxT %*% solve(C + noise) %*% Cx)
+	post.mean = CxT %*% solve(C + noise) %*% y
+	post.var = diag(  Cxx - CxT %*% solve(C + noise) %*% Cx  )
 	
 	return(list(post.mean=post.mean,post.var=post.var))	
 }
@@ -464,32 +461,4 @@ make.covmatrix = function(x,y,cov.fun,params=NA){
 			covmatrix[i,j] = cov.fun(x[i],y[j],params)
 	}
 	return(covmatrix)
-}
-
-#NOT USED: Alternative to rmvnorm:
-my.rmvnorm = function(n,mu,Sigma){
-	#-------------------------------------------------------------
-	#FUNCTION: Simulates mvn random variables given a mean mu and cov Sigma. (From Ex 1 - Bootstrap)
-	#This function returns n X ~ MVN(mu,Sigma) realization.
-	#-------------------------------------------------------------
-	#INPUTS: 	mu = desired vector of means.  Must be length p.
-	#			Sigma = desired covariance matrix.  Must be (pxp), symmetric, pos semidef.
-	#			n = number of mvn random variables to generate.
-	#-------------------------------------------------------------
-	#OUTPUTS: 	x = a matrix of realizations from MVN(mu,Sigma).  (Each x is a column.)
-	#-------------------------------------------------------------
-	p = length(mu)		#Set length of mu vector.
-	z = matrix(rnorm(n*p,0,1),nrow=p,ncol=n)	#Generate p iid standard normals z_i for each realization
-	
-	eg = eigen(Sigma)			#Store spectoral value decomposition of Sigma.
-	V = eg$vectors				#Extract eigen vectors.
-	lam = diag(eg$values)		#Extract diagonal matrix of eigenvalues.
-	
-	L = V %*% sqrt(lam)			#Assign L so LL^T = Sigma	
-
-	#Compute realizations of x ~ mvn(mu,Sigma)
-	#x = L %*% z + mu
-	x = apply(z,2,function(a) L %*% a + mu)
-
-	return(x)
 }
