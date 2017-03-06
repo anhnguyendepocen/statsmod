@@ -22,13 +22,13 @@ y = utilities$gasbill / utilities$billingdays		#avg daily bill
 n = length(x)
 
 #================================================================
-# Pointwise Posterior Mean & 95% CI for all observed xi =========
+# C: Pointwise Posterior Mean & 95% CI for all observed xi ======
 #================================================================
 
 #Set up hyperparameters.
 b = 10
 tau1.sq = 5
-tau2.sq = 1e-6
+tau2.sq = 0
 triplet = c(b,tau1.sq,tau2.sq)
 params=triplet
 
@@ -37,7 +37,7 @@ pred = gp.predict(x,y,x.new=x,mu=rep(0,n),cov.fun=cov.se,params=triplet,sig2=1)
 sig2 = sum(y-pred$post.mean)^2/(n-1)
 
 #Rerun with estimated sigma2.
-pred = gp.predict(x,y,x.new=x,mu=rep(0,n),cov.fun=cov.se,params=triplet,sig2=2)
+pred = gp.predict(x,y,x.new=x,mu=rep(0,n),cov.fun=cov.se,params=triplet,sig2=sig2)
 
 #Vectors to hold posterior mean, var, and CI bounds.
 post.mean = pred$post.mean
@@ -59,159 +59,67 @@ points(x,y)
 lines(x.new[idx],post.mean[idx],col='blue')
 
 dev.off()
-#================================================================
-# Test Gaussian Process Function ================================
-#================================================================
-
-### Generate gaussian process realizations.
-n=100
-x = sample(seq(0,1,.0001),n,replace=T)
-
-b = 1
-tau1.sq = 1e-5
-tau2.sq = 1e-6
-triplet = c(b,tau1.sq,tau2.sq)
-
-x.se = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.se)
-x.m52 = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.m52)
-
-#Test plot.
-idx = sort(x, index.return = T)$ix
-plot(x[idx],x.se[idx],col='blue',lwd=1,type='l')
 
 #================================================================
-# Hyperparameter Plotting for Sq Exp Cov Fctn GP ================
+# E: Plot log of marginal likelihood for varying tau1.sq and b. =
+#	Then use optimal parameters to compute posterior mean       =
+#	for f given y.                                              =
 #================================================================
 
-#----------------------------------------------------------------
-### Test 1: Varying b for Sq Exponential and Matern 5/2 Cov Functions.
+#Grid mesh of parameters to test.
+tau2.sq = 0
+tau1.sq = seq(15,90,by=1)
+b = seq(40,90,by=1)
+triplets = expand.grid(b,tau1.sq,tau2.sq)
 
-tau1.sq = .001
-tau2.sq = 1e-6
+#Empty vector to hold marginal log-likelihoods.
+ll = rep(0,nrow(triplets))
 
-B=c(.05,.1,.25,1,4)
-colors = rainbow(length(B))
-
-#Squared exponential plot.
-pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/Figures/GP_Varying_b_SqExp.pdf')
-for (i in 1:length(B)){
-	b = B[i]
-	triplet = c(b,tau1.sq,tau2.sq)
-
-	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.se)
-	idx = sort(x, index.return = T)$ix
-	
-	if (i==1){
-		plot(x[idx],fx[idx],lwd=2,type='l',col=colors[i],ylim=c(-.15,.15),main='Squared Exponential Covariance (tau1.sq=.001,tau2.sq=1e-6)')
-	} else{
-		lines(x[idx],fx[idx],lwd=2,type='l',col=colors[i])
-	}
+#Iterate through triplets.
+for (k in 1:length(ll)){
+	print(length(ll)-k)
+	triplet = unlist(triplets[k,])
+	ll[k] = gp.logl.y(x,y,mu=rep(0,length(x)),cov.fun=cov.se,params=triplet,sig2=1)
 }
-legend('topleft',lty=1,lwd=2,legend=paste('b=',B),col=colors)
+
+#Save optimal triplet of parameters.
+max.idx = which.max(ll)
+opt.triplet = unlist(triplets[max.idx,])
+ll[max.idx]
+
+#Contour plot of marginal loglikelihood.
+pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/Figures/6_MargLogl_Y.pdf')
+z = matrix(ll,byrow=F,nrow=length(b))
+contour(b,tau1.sq,z,nlevels=20,xlab='b',ylab='tau1.sq',main=paste('Marginal Log-Likelihood of Y | sig2 = ',sig2),
+	sub=paste('Optimal params: b = ',opt.triplet[1], " tau1.sq = ",opt.triplet[2]))
+points(opt.triplet[1],opt.triplet[2],pch=19,cex=1,col='red')
 dev.off()
 
-#Matern 5/2 plot.
-pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/Figures/GP_Varying_b_M52.pdf')
-for (i in 1:length(B)){
-	b = B[i]
-	triplet = c(b,tau1.sq,tau2.sq)
+#---------------------------------------------------------
+#Use optimal parameters to calculate posterior mean of f|y,params,sig2.
+# (Repeating Part C, but with optimal parameters.)
 
-	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.m52)
-	idx = sort(x, index.return = T)$ix
-	
-	if (i==1){
-		plot(x[idx],fx[idx],lwd=2,type='l',col=colors[i],ylim=c(-.15,.15),main='Matern 5/2 Covariance (tau1.sq=.001,tau2.sq=1e-6)')
-	} else{
-		lines(x[idx],fx[idx],lwd=2,type='l',col=colors[i])
-	}
-}
-legend('topleft',lty=1,lwd=2,legend=paste('b=',B),col=colors)
+#Run prediction with sigma2=1 to estimate residuals.
+pred = gp.predict(x,y,x.new=x,mu=rep(0,n),cov.fun=cov.se,params=opt.triplet,sig2=1)
+
+#Vectors to hold posterior mean, var, and CI bounds.
+post.mean = pred$post.mean
+post.se = sqrt(pred$post.var)
+post.ci.lb = post.mean - 1.96*post.se
+post.ci.ub = post.mean + 1.96*post.se
+
+#Plotting:
+pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/Figures/6_E_opt_params.pdf')
+x.new=x
+idx = sort(x.new, index.return = T)$ix
+plot(x,y,col='darkgrey',xlab='x',ylab='y',main='Utilities Data Posterior Mean and 95% CI with Optimal Parameters',
+	sub=paste('Optimal params: b = ',opt.triplet[1], " tau1.sq = ",opt.triplet[2]))
+lines(x.new[idx],post.ci.lb[idx],col='red',lty=2)
+lines(x.new[idx],post.ci.ub[idx],col='red',lty=2)
+
+#Shade confidence bands.
+polygon(c(sort(x.new),rev(sort(x.new))),c(post.ci.ub[idx],rev(post.ci.lb[idx])),col='lightgrey',border=NA)
+points(x,y)
+lines(x.new[idx],post.mean[idx],col='blue')
+
 dev.off()
-
-#----------------------------------------------------------------
-### Test 2: Varying tau1.sq for Sq Exponential and Matern 5/2 Cov Functions.
-
-b = .1
-tau1.list = c(.05,.1,.25,1,4)
-tau2.sq = 1e-6
-colors = rainbow(length(B))
-
-#Squared exponential plot.
-pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/Figures/GP_Varying_tau1sq_SqExp.pdf')
-for (i in 1:length(tau1.list)){
-	tau1.sq = tau1.list[i]
-	triplet = c(b,tau1.sq,tau2.sq)
-
-	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.se)
-	idx = sort(x, index.return = T)$ix
-	
-	if (i==1){
-		plot(x[idx],fx[idx],lwd=2,type='l',col=colors[i],ylim=c(-5,5),main='Squared Exponential Covariance (b=.1,tau2.sq=1e-6)')
-	} else{
-		lines(x[idx],fx[idx],lwd=2,type='l',col=colors[i])
-	}
-}
-legend('topleft',lty=1,lwd=2,legend=paste('tau1.sq=',tau1.list),col=colors)
-dev.off()
-
-#Matern 5/2 plot.
-pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/Figures/GP_Varying_tau1sq_M52.pdf')
-for (i in 1:length(B)){
-	tau1.sq = tau1.list[i]
-	triplet = c(b,tau1.sq,tau2.sq)
-
-	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.m52)
-	idx = sort(x, index.return = T)$ix
-	
-	if (i==1){
-		plot(x[idx],fx[idx],lwd=2,type='l',col=colors[i],ylim=c(-5,5),main='Matern 5/2 Covariance (b=.1,tau2.sq=1e-6)')
-	} else{
-		lines(x[idx],fx[idx],lwd=2,type='l',col=colors[i])
-	}
-}
-legend('topleft',lty=1,lwd=2,legend=paste('tau1.sq=',tau1.list),col=colors)
-dev.off()
-#----------------------------------------------------------------
-### Test 3: Varying tau2.sq for Sq Exponential and Matern 5/2 Cov Functions.
-
-b = .1
-tau1.sq = .01
-tau2.list = c(.05,.1,.25,1,4)
-colors = rainbow(length(B))
-
-#Squared exponential plot.
-pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/Figures/GP_Varying_tau2sq_SqExp.pdf')
-for (i in 1:length(tau1.list)){
-	tau2.sq = tau2.list[i]
-	triplet = c(b,tau1.sq,tau2.sq)
-
-	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.se)
-	idx = sort(x, index.return = T)$ix
-	
-	if (i==1){
-		plot(x[idx],fx[idx],lwd=2,type='l',col=colors[i],ylim=c(-5,5),main='Squared Exponential Covariance (b=.1,tau1.sq=.01)')
-	} else{
-		lines(x[idx],fx[idx],lwd=2,type='l',col=colors[i])
-	}
-}
-legend('topleft',lty=1,lwd=2,legend=paste('tau2.sq=',tau2.list),col=colors)
-dev.off()
-
-#Matern 5/2 plot.
-pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/Figures/GP_Varying_tau2sq_M52.pdf')
-for (i in 1:length(B)){
-	tau2.sq = tau2.list[i]
-	triplet = c(b,tau1.sq,tau2.sq)
-
-	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.m52)
-	idx = sort(x, index.return = T)$ix
-	
-	if (i==1){
-		plot(x[idx],fx[idx],lwd=2,type='l',col=colors[i],ylim=c(-5,5),main='Matern 5/2 Covariance (b=.1,tau1.sq=.01)')
-	} else{
-		lines(x[idx],fx[idx],lwd=2,type='l',col=colors[i])
-	}
-}
-legend('topleft',lty=1,lwd=2,legend=paste('tau2.sq=',tau2.list),col=colors)
-dev.off()
-

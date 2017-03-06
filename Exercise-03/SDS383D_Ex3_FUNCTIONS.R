@@ -310,6 +310,7 @@ gaussian_process = function(x,mu,cov.fun,params){
 	return(fx)
 }
 
+
 gp.predict = function(x,y,x.new,mu,cov.fun,params,sig2=0){
 	#-------------------------------------------------------------
 	#FUNCTION: 	Generates predictions from the noisy Gaussian Process 
@@ -348,6 +349,40 @@ gp.predict = function(x,y,x.new,mu,cov.fun,params,sig2=0){
 	post.var = diag(  Cxx - CxT %*% solve(C + noise) %*% Cx  )
 	
 	return(list(post.mean=post.mean,post.var=post.var))	
+}
+
+gp.logl.y = function(x,y,mu,cov.fun,params,sig2=0){
+	#-------------------------------------------------------------
+	#FUNCTION: 	Generates values of the marginal log-likelihood p(y) 
+	#			from the noisy Gaussian Process 
+	#			with specified mean and covariance matrix.
+	#			Model: y = f(x) + e, with e ~ N(0,sig2*I)
+	#			Marginal of y: multivariate N(0,sig2I + C)
+	#			Logl of Marginal of y: 
+	#-------------------------------------------------------------
+	#INPUTS: 	x = vector (x1,...,xn) 
+	#			y = observed GP values at each x.  Can be noisy, or not.
+	#			params = vector(b,tau1.sq,tau2.sq) of 3 hyperparameters,
+	#				where:
+	#				b = 
+	#				tau1.sq = 
+	#				tau2.sq = 
+	#			mu = vector of means, length n.
+	#			cov.fun = covariance matrix function.
+	#			sig2 = variance for noise. 0 predicts for a non-noisy GP.
+	#-------------------------------------------------------------
+	#OUTPUTS:	marg.logl = marginal loglikelihood of y (given x, params)
+	#-------------------------------------------------------------
+	require(mvtnorm)
+	n = length(x)
+	
+	#Build covariance matrix.
+	C	= make.covmatrix(x,x,cov.fun,params)
+	sig2I = sig2 * diag(n)
+	
+	#Calculate and return marginal log-likelihood for y.
+	marg.logl = dmvnorm(y,rep(0,length(x)),sig2I + C,log=T)
+	return(marg.logl)
 }
 
 l2norm = function(x){
