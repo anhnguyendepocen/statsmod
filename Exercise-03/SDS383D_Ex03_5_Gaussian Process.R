@@ -10,7 +10,7 @@
 rm(list=ls())
 
 #Load functions.
-source('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/RCode/SDS383D_Ex3_FUNCTIONS.R')
+source('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/RCode/SDS383D_Ex3_FUNCTIONS_Gaussian_Processes_Rcpp.R')
 
 #================================================================
 # Test Gaussian Process Function ================================
@@ -18,15 +18,15 @@ source('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/RCode/SD
 
 ### Generate gaussian process realizations.
 n=100
-x = sample(seq(0,1,.0001),n,replace=T)
+x = rnorm(100,0,1)
 
 b = 1
-tau1.sq = 1
+tau1.sq = .1
 tau2.sq = 1e-6
 triplet = c(b,tau1.sq,tau2.sq)
 
-x.se = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.se)
-x.m52 = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.m52)
+x.se = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov_se)
+x.m52 = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov_m52)
 
 #Test plot.
 idx = sort(x, index.return = T)$ix
@@ -35,7 +35,7 @@ plot(x[idx],x.se[idx],col='black',lwd=1,type='l',ylim=c(-3,3))
 #Plot a bunch.
 color=rainbow(10)
 for (i in 1:10){
-	x.se = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.se)
+	x.se = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov_se)
 	lines(x[idx],x.se[idx],lwd=1,col=color[i])
 }
 
@@ -58,7 +58,7 @@ for (i in 1:length(B)){
 	b = B[i]
 	triplet = c(b,tau1.sq,tau2.sq)
 
-	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.se)
+	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov_se)
 	idx = sort(x, index.return = T)$ix
 	
 	if (i==1){
@@ -76,7 +76,7 @@ for (i in 1:length(B)){
 	b = B[i]
 	triplet = c(b,tau1.sq,tau2.sq)
 
-	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.m52)
+	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov_m52)
 	idx = sort(x, index.return = T)$ix
 	
 	if (i==1){
@@ -102,7 +102,7 @@ for (i in 1:length(tau1.list)){
 	tau1.sq = tau1.list[i]
 	triplet = c(b,tau1.sq,tau2.sq)
 
-	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.se)
+	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov_se)
 	idx = sort(x, index.return = T)$ix
 	
 	if (i==1){
@@ -120,7 +120,7 @@ for (i in 1:length(B)){
 	tau1.sq = tau1.list[i]
 	triplet = c(b,tau1.sq,tau2.sq)
 
-	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.m52)
+	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov_m52)
 	idx = sort(x, index.return = T)$ix
 	
 	if (i==1){
@@ -145,7 +145,7 @@ for (i in 1:length(tau1.list)){
 	tau2.sq = tau2.list[i]
 	triplet = c(b,tau1.sq,tau2.sq)
 
-	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.se)
+	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov_se)
 	idx = sort(x, index.return = T)$ix
 	
 	if (i==1){
@@ -163,7 +163,7 @@ for (i in 1:length(B)){
 	tau2.sq = tau2.list[i]
 	triplet = c(b,tau1.sq,tau2.sq)
 
-	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov.m52)
+	fx = gaussian_process(x,params=triplet,mu=rep(0,length(x)),cov.fun=cov_m52)
 	idx = sort(x, index.return = T)$ix
 	
 	if (i==1){

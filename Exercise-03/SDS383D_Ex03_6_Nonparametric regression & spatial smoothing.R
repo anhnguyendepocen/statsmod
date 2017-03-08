@@ -11,7 +11,7 @@
 rm(list=ls())
 
 #Load functions.
-source('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/RCode/SDS383D_Ex3_FUNCTIONS.R')
+source('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-03/RCode/SDS383D_Ex3_FUNCTIONS_Gaussian_Processes_Rcpp.R')
 
 #Load data.
 utilities = read.csv('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/statsmod/Course-Data/utilities.csv',header=T)
@@ -33,11 +33,11 @@ triplet = c(b,tau1.sq,tau2.sq)
 params=triplet
 
 #Run prediction with sigma2=1 to estimate residuals.
-pred = gp.predict(x,y,x.new=x,mu=rep(0,n),cov.fun=cov.se,params=triplet,sig2=1)
+pred = gp.predict(x,y,x.new=x,mu=rep(0,n),cov.fun=cov_se,params=triplet,sig2=1)
 sig2 = sum(y-pred$post.mean)^2/(n-1)
 
 #Rerun with estimated sigma2.
-pred = gp.predict(x,y,x.new=x,mu=rep(0,n),cov.fun=cov.se,params=triplet,sig2=sig2)
+pred = gp.predict(x,y,x.new=x,mu=rep(0,n),cov.fun=cov_se,params=triplet,sig2=sig2)
 
 #Vectors to hold posterior mean, var, and CI bounds.
 post.mean = pred$post.mean
@@ -79,7 +79,7 @@ ll = rep(0,nrow(triplets))
 for (k in 1:length(ll)){
 	print(length(ll)-k)
 	triplet = unlist(triplets[k,])
-	ll[k] = gp.logl.y(x,y,mu=rep(0,length(x)),cov.fun=cov.se,params=triplet,sig2=1)
+	ll[k] = gp.logl.y(x,y,mu=rep(0,length(x)),cov.fun=cov_se,params=triplet,sig2=1)
 }
 
 #Save optimal triplet of parameters.
@@ -100,7 +100,7 @@ dev.off()
 # (Repeating Part C, but with optimal parameters.)
 
 #Run prediction with sigma2=1 to estimate residuals.
-pred = gp.predict(x,y,x.new=x,mu=rep(0,n),cov.fun=cov.se,params=opt.triplet,sig2=1)
+pred = gp.predict(x,y,x.new=x,mu=rep(0,n),cov.fun=cov_se,params=opt.triplet,sig2=1)
 
 #Vectors to hold posterior mean, var, and CI bounds.
 post.mean = pred$post.mean
