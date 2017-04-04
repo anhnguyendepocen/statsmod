@@ -42,7 +42,7 @@ gibbs.mathtest = function(y,x,iter=11000,burn=1000,thin=2){
 	sig.sq = rep(0,iter)			#Vector of posterior sig2.sq samples
 	tau.sq = rep(0,iter)			#Vector of posterior tau2.sq samples
 
-	#Initialize each element of chain.
+	#Initialize each elemens of chain.
 	theta[1,] = rep(0,p)
 	mu[1] = mean(y)
 	sig.sq[1] = 1
@@ -98,7 +98,7 @@ gibbs.mathtest = function(y,x,iter=11000,burn=1000,thin=2){
 # Cheese: Hierarchical Model Gibbs Sampler ======================
 #================================================================
 
-gibbs.cheese = function(y,X,idx,m,v,C,d,iter=11000,burn=1000,thin=2){
+gibbs.cheese = function(y,X,idx,muB,V,C,d,iter=11000,burn=1000,thin=2){
 	#-------------------------------------------------------------
 	#FUNCTION: 	Gibbs Sampler for cheese demand curve model.
 	#			Unknown parameters: (m,v,C,d)
@@ -124,69 +124,101 @@ gibbs.cheese = function(y,X,idx,m,v,C,d,iter=11000,burn=1000,thin=2){
 	#-------------------------------------------------------------
 	require(MCMCpack)							#Sample from Inverse Wishart.
 	require(mvtnorm)							#Sample from Multivariate Normal.
-	require(LaplacesDemon)						#Sample from Normal-Inverse-Wishart
+	require(MASS)								#Generalized inverse.
 	
 	n = length(y)									#Number of observations.
-	nt = aggregate(y, list(idx$store), length)$x	#Sample sizes for each group (# time points per store).
+	ns = aggregate(y, list(idx$store), length)$x	#Sample sizes for each group (# time poinss per store).
 	s = length(unique(idx$store))					#Number of groups (stores).
-	p = 3											#Number of predictors.
-	ybar = aggregate(y, list(idx$store), mean)$x	#Sample group means.
+	p = ncol(X)										#Number of predictors.
+
+	#-------------------------------------------------------------
+	#Set up yi, Xi, Wi matrices for each store.  Save in a list.
+	yi = list()
+	Xi = list()
+	Wi = list()
 	
-	#Sample group means for each x covariate.
-	Xbar = data.frame(matrix(nrow=s,ncol=p))
-	for (k in 1:p){
-		Xbar[,k] = aggregate(X[,k],list(idx$store),mean)$x
+	#Iterate through each store number.
+	for (i in 1:s){	
+		yi[[i]] = y[which(idx$store==i)]
+		Xi[[i]] = as.matrix(X[which(idx$store==i),])
+		Wi[[i]] = Xi[[i]]
 	}
-	Xbar = as.matrix(Xbar)
-	X = as.matrix(X)
 
-	#Set up data structures to hold Gibbs samples from posteriors.
-	Bi = array(0,dim=c(s,p,iter))		#Each slice is a (sxp) matrix, with each column as a vector of covariates for each store. 
-	matrix(0,iter,p)					#Each row is a p-length Gibbs sample of B_(px1) vector.
-	sig.sq = rep(0,iter)				#Vector of posterior sig2.sq samples
-	mu = matrix(0,iter,p)				#Each row is a p-length Gibbs sample of mu_(px1) vector.
-	Sigma = array(0,dim=c(p,p,iter))	#Each Sigma[,,1] is a pxp Gibbs sample of Sigma matrix.
-
-	#Initialize each element of chain.
-	Bi[,,1] = rep(0,s*p)
+	#Set up data structures to hold the Gibbs samples from the posteriors.
+	Beta = matrix(0,p,iter)				#Each entry is a (px1) gibbs sample.  (Constant across store.)
+	bi = array(0,dim=c(p,s,iter))		#Each gibbs sample slice is a (sxp) matrix, with p covariates for s stores.
+	Sigma = array(0,dim=c(p,p,iter))	#Each gibbs sample slice is a (pxp) matrix.
+	sig.sq = rep(0,iter)				#Each sig.sq value is a gibbs sample.
+		
+	#Initialize first element of chain.
+	Beta[1] = 0
+	bi[,,1] = rep(0,s*p)
 	sig.sq[1] = 1
-	mu[1,] = rep(mean(y),p)
 	Sigma[,,1] = diag(p)
 	
 	#Iterate through sampler.
 	for (k in 2:iter){
 		
-		#Update B_i values for each store.
+		#print iteration.
+		print(k)
 		
-		SigInv = solve(Sigma[,,k-1])	#Prechache Sigma inverse.
+		#--------------------------------------------------------
+		### Update bi for each store.
 		
-		for (j in 1:s){	#Loop through stores.
-			Xi = X[which(j==idx$storenum),]	#Pull only Xi values for current store.
-			yi = y[which(j==idx$storenum)]	#Pull out responses for current store.
-			Bi.var = solve( solve(SigInv) + (nt[j]/sig.sq[k-1]) * t(Xi) %*% Xi	)
-			Bi.mean = Bi.var %*% (SigInv %*% mu[k-1,] + (nt[j]/sig.sq[k-1]) * t(Xi) %*% yi )
+		#Precache values.
+		SigInv = solve(Sigma[,,k-1])
+		
+		SS.Beta.1 = 0	#\sum_{i=1}^{s} Xi^T * Xi for Beta update.
+		SS.Beta.2 = 0	#\sum_{i=1}^{s} Xi^T * (yi + Wi*bi) for Beta update.
+		SS.sig.sq = 0	#\sum_{i=1}^{s} Xi^T(yi-Wi*bi) for sig.sq update.
+		SS.Sigma = 0	#\sum_{i=1}^{s} bi * bi^T for Sigma update.
+		
+		for (j in 1:s){
 			
-			Bi[j,,k] = rmvnorm(1,Bi.mean,Bi.var)
-		}
+			#Extract elements for store j.
+			X.j = Xi[[j]]
+			y.j = yi[[j]]
+			W.j = Wi[[j]]
+			
+			#Precache WTW and y-XB
+			WTW = crossprod(W.j)
+			YmXB = y.j - X.j %*% Beta[,k-1] 
+			
+			#Save prior precision and data precision.			
+			Var = solve(SigInv + (1/sig.sq[k-1]) * WTW)
+			mean = (1/sig.sq[k-1]) * Var %*% crossprod(W.j,YmXB)
+			
+			bi[,j,k] = rmvnorm(1,mean,Var)
+			
+			#While in store loop, precache values to be used in Beta, sig.sq, and Sigma updates.
+			SS.Beta.1 =+ crossprod(X.j)
+			SS.Beta.2 =+ crossprod(X.j, y.j - W.j %*% bi[,j,k])		
+			SS.sig.sq =+ crossprod(y.j - X.j %*% Beta[,k-1] - W.j %*% bi[,j,k])
+			SS.Sigma =+ tcrossprod(bi[,j,k])
+		} #End store loop.
 		
-		#Update sig.sq values.
-		Bi.lookup = Bi[idx$store,,k]	#Finds Bi for each yi, based on store number.
-		SS = sum((y - X %*% t(Bi.lookup))^2)
-		sig.sq[k] = 1 / rgamma(1,n/2,.5 * SS)
+		#--------------------------------------------------------
+		### Update Beta.
 		
-		#Update mu and Sigma values.
-		Bi.bar = colMeans(Bi[,,k])						#Precache.
-		S = t(Bi[,,k] - Bi.bar)	%*% (Bi[,,k] - Bi.bar)	#Precache.
+		#Precache.
+		VInv = solve(V)
 		
-		mn = (v*m + s*Bi.bar) / (v + s)	#Posterior NIW mean parameter.
-		vn = v + s						#Posterior cov parameter.
-		dn = d + s						#Posterior df parameter.
-		Cn = C + S + (v*s / (v+s)) * (Bi.bar - m) %*% t(Bi.bar - m)		#Posterior scale matrix.
+		Var = solve(VInv + (1/sig.sq[k-1]) * SS.Beta.1)
+		mean = Var %*% ( VInv %*% muB + (1/sig.sq[k-1]) * SS.Beta.2)
+			
+		Beta[,k] = rmvnorm(1,mean,Var)
 		
-		niv.draw = rnorminvwishart(n=1,mn,vn,Cn,dn)	#Draw from Normal-Inverse-Wishart.
-		Sigma[,,k] = niv.draw$Sigma
-		mu[k,] = niv.draw$mu
-	}
+		#--------------------------------------------------------
+		### Update sig.sq.
+		sig.sq[k] = 1 / rgamma(1,n/2, SS.sig.sq/2)
+		
+		#--------------------------------------------------------
+		### Update Sigma.
+		dn = d + s
+		Cn = C + SS.Sigma
+		
+		Sigma[,,k] = riwish(dn,Cn)
+	} #End Gibbs sampler loop.
 	
 	#Burn beginning observations.
 	if (burn > 0){
@@ -205,15 +237,20 @@ gibbs.cheese = function(y,X,idx,m,v,C,d,iter=11000,burn=1000,thin=2){
 	}
 	
 	#Calculate posterior means.
-	Bi.post.mean = apply(Bi,c(1,2),mean)
-	Sigma.post.mean = apply(Sigma,c(1,2),mean)
-	mu.post.mean = colMeans(mu)
-	sig.sq.post.mean = mean(sig.sq)
+	bi.pm = apply(bi,c(1,2),mean)
+	Beta.pm = rowMeans(Beta)
+	sig.sq.pm = mean(sig.sq)
+	Sigma.pm = apply(Sigma,c(1,2),mean)
 	
-	#Return results.
-	return(list(Bi=Bi,Sigma=Sigma,mu=mu,sig.sq=sig.sq,
-		Bi.post.mean=Bi.post.mean, 
-		Sigma.post.mean=Sigma.post.mean,
-		mu.post.mean=mu.post.mean,
-		sig.sq.post.mean=sig.sq.post.mean))
-}
+	#Return results. 
+	return(list(
+		bi=bi,
+		Beta=Beta,
+		sig.sq=sig.sq,
+		Sigma=Sigma,
+		bi.pm=bi.pm,
+		Beta.pm=Beta.pm,
+		sig.sq.pm=sig.sq.pm,
+		Sigma.pm=Sigma.pm
+	))
+} #End gibbs.cheese function.
