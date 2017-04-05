@@ -151,7 +151,7 @@ C = diag(p)
 d = p+1
 
 #Call gibbs sampler function.
-output = gibbs.cheese(y,X,idx,muB,V,C,d,iter=11000,burn=1000,thin=2)
+output = gibbs.cheese(y,X,idx,muB,V,C,d,iter=5100,burn=100,thin=2)
 
 #Set column names for posterior bi vector.
 rownames(output$bi.pm) = c("Intercept","logP","disp","logP:disp")

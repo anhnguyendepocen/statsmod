@@ -222,17 +222,15 @@ gibbs.cheese = function(y,X,idx,muB,V,C,d,iter=11000,burn=1000,thin=2){
 	
 	#Burn beginning observations.
 	if (burn > 0){
-		Bi = Bi[,,-burn]
+		bi = bi[,,-burn]
 		Sigma = Sigma[,,-burn]
-		mu = mu[-burn,]
 		sig.sq = sig.sq[-burn]
 	}
 	
 	#Thin observations.
 	if (thin > 0){
-		Bi = Bi[,,seq(1,dim(Bi)[3],by=thin)]
+		bi = bi[,,seq(1,dim(bi)[3],by=thin)]
 		Sigma = Sigma[,,seq(1,dim(Sigma)[3],by=thin)]
-		mu = mu[seq(1,nrow(mu),by=thin),]
 		sig.sq = sig.sq[seq(1,length(sig.sq),by=thin)]
 	}
 	
@@ -254,3 +252,181 @@ gibbs.cheese = function(y,X,idx,muB,V,C,d,iter=11000,burn=1000,thin=2){
 		Sigma.pm=Sigma.pm
 	))
 } #End gibbs.cheese function.
+
+#================================================================
+# Polls: Hierarchical Augmented Probit Model Gibbs Sampler ======
+#================================================================
+
+gibbs.probit = function(y,X,idx,muB,Sigma,iter=11000,burn=1000,thin=2){
+	#-------------------------------------------------------------
+	#FUNCTION: 	Gibbs Sampler for augmented probit model.
+	#-------------------------------------------------------------
+	#MODEL:		Hierarchical model:
+	#			y_{it} ~ Bernoulli(p = prob(Phi(mu_i + X_{it}^T %** Beta)) )
+	#			y's observed, but we introduce latent z's, where:
+	#
+	#			z_i ~ N(mu_i + X_i*Beta)
+	#			Beta ~ N(muB, V)
+	#			mu_i ~ N(0,tau.sq)
+	#			tau.sq ~ 1/tau.sq (Jeffreys)
+	#-------------------------------------------------------------
+	#INPUTS: 	y = vector of log-demand for stores i at times t.
+	#			X = matrix of responses, with one row for each store/time combo.
+	#			muB,Sigma = hyperparameters for fixed Beta.
+	#-------------------------------------------------------------
+	#OUTPUTS:	probs.post = vector of posterior p(y=1) samples.
+	#			z.post = vector of posterior z samples.
+	#			B.post = matrix of posterior B samples (rows = samples)
+	#			mui.post = matrix of posterior mui samples (rows = samples)
+	#			tau.sq.post = vector of posterior tau.sq samples. 
+	#-------------------------------------------------------------
+	require(MCMCpack)						#Sample from Inverse Wishart.
+	require(mvtnorm)						#Sample from Multivariate Normal.
+	
+	n = length(y)									#Number of observations.
+	ns = aggregate(y, list(idx$state), length)$x	#Sample sizes for each group (# time poinss per store).
+	s = length(unique(idx$state))					#Number of groups (stores).
+	p = ncol(X)										#Number of predictors.
+
+	#-------------------------------------------------------------
+	
+	#Set up data structures to hold the Gibbs samples from the posteriors.
+	Beta = matrix(0,p,iter)				#Each entry is a (px1) gibbs sample.  (Constant across state.)
+	mu.i = matrix(0,s,iter)				#Each slice is a (sxp) matrix, with s state intercept offsets.
+	tau.sq = rep(0,iter)				#Each entry is a scalar tau.sq.
+	z.i = list()						#Each list element will be a (ni x iter) matrix of z_ij for that state.
+	
+	#Set up yi, Xi, Wi matrices for each store.  Save in a list.
+	yi = list()		#Holds responses for each state.
+	Xi = list()		#Design matrix for covariates (fixed effects).
+	Wi = list()		#Vector of ones, length ns, for each state.
+	z.i = list()	#Matrices of latent variables for each state.
+	py.i = list()	#Matrices of P(y_ij=1) for each state.
+	
+	#Setup: Iterate through each state.
+	for (j in 1:s){	
+		#Set up y, X and W for each state.
+		yi[[j]] = y[which(idx$state==j)]
+		Xi[[j]] = as.matrix(X[which(idx$state==j),])
+		Wi[[j]] = as.matrix(rep(1,ns[j]),ncol=1,drop=F)
+		
+		z.i[[j]] = matrix(0,ns[j],iter)
+		z.i[[j]][,1] = rnorm(ns[j],0,1)
+		
+		py.i[[j]] = matrix(0,ns[j],iter)
+		py.i[[j]][,1] = rbeta(ns[j],.5,.5)
+	}			
+	
+	#Initialize remaining chains' first elements.
+	Beta[,1] = 0
+	mu.i[,1] = rep(.01,s)
+	tau.sq[1] = 1
+	
+	#Precache SigInv. (No prior on Sigma.)
+	SigInv = solve(Sigma)
+	
+	#Iterate through sampler.
+	for (k in 2:iter){
+		
+		#print iteration.
+		print(k)
+		
+		#--------------------------------------------------------
+		### Update tau.sq.
+		rt = sum((mu.i[,k-1])^2)
+		tau.sq[k] = 1 / rgamma(1,s/2 + 1,rt/2)
+		
+		#--------------------------------------------------------
+		### Update Beta.
+		
+		#Precache sums over states for Beta update.
+		SS.Beta.1 = 0	#\sum_{j=1}^{s} X.i ^T X.i
+		SS.Beta.2 = 0	#\sum_{j=1}^{s} X.j^T * (z.j - mu.j*W.j)
+		
+		for (j in 1:s){
+			#Extract elements for each state.
+			z.j = z.i[[j]][,k-1]
+			X.j = Xi[[j]]
+			W.j = Wi[[j]]
+			
+			SS.Beta.1 =+ crossprod(X.j)
+			SS.Beta.2 =+ crossprod(X.j,z.j - mu.i[j,k-1]*W.j)
+		}
+		
+		#Calculate mean and variance, and draw updated value.
+		Var = solve(SigInv + SS.Beta.1)
+		mean = Var %*% (SigInv %*% muB + SS.Beta.2)
+		Beta[,k] = rmvnorm(1,mean,Var)
+		
+		#--------------------------------------------------------
+		### Iterate through states to update mu.i, z.i, py.i.
+		
+		#Iterate through states.
+		for (j in 1:s){
+			
+			# Extract elements for each state.
+			z.j = z.i[[j]][,k-1]
+			X.j = Xi[[j]]
+			W.j = Wi[[j]]
+			
+			#----------------------------------------------------
+			# Update mu.i for each state.
+			Var = 1 / (tau.sq[k] + ns[j])
+			mean = Var * crossprod(W.j, z.j - X.j %*% Beta[,k])
+			mu.i[j,k] = rnorm(1,mean,sqrt(Var))
+						
+			#----------------------------------------------------
+			# Update z.j for each state.
+			Var = diag(ns[j])
+			mean = mu.i[j,k] * W.j + X.j %*% Beta[,k]
+			z.i[[j]][,k] = as.numeric(rmvnorm(1,mean,Var))
+			
+			#----------------------------------------------------
+			#Update py.j for each state.
+			py.i[[j]][,k] = pnorm(mu.i[j,k]*W.j + X.j %*% Beta[,k])
+	
+		} #End store loop.
+	} #End Gibbs sampler loop.
+	
+	#Burn beginning observations.
+	if (burn > 0){
+		mu.i = mu.i[,-burn]
+		tau.sq = tau.sq[-burn]	
+		z.i = lapply(z.i, function(x) x[,-burn])
+		py.i = lapply(py.i, function(x) x[,-burn])
+	}
+	
+	#Thin observations.
+	if (thin > 0){
+		mu.i = mu.i[,seq(1,ncol(mu.i),by=thin)]
+		tau.sq = tau.sq[seq(1,length(tau.sq),by=thin)]
+		
+		z.i = lapply(z.i, function(x) x[,seq(1,ncol(x),by=thin)])
+		py.i = lapply(py.i, function(x) x[,seq(1,ncol(x),by=thin)])
+	}
+	
+	#Calculate posterior means.
+	mu.i.pm = rowMeans(mu.i)
+	Beta.pm = rowMeans(Beta)
+	tau.sq.pm = mean(tau.sq)
+	z.i.pm = lapply(z.i, function(x) rowMeans(x))
+	py.i.pm = lapply(py.i, function(x) rowMeans(x))
+
+	#Calculate predicted y values based on posterior means of z.i.
+	y.pred = unlist(lapply(z.i.pm, function(x) ifelse(x>0,1,0)))
+	
+	#Return results. 
+	return(list(
+		mu.i=mu.i,
+		Beta=Beta,
+		tau.sq=tau.sq,
+		z.i = z.i,
+		py.i = py.i,
+		mu.i.pm=mu.i.pm,
+		Beta.pm = Beta.pm,
+		tau.sq.pm = tau.sq.pm,
+		z.i.pm=z.i.pm,
+		py.i.pm=py.i.pm,
+		y.pred=y.pred
+	))
+} #End gibbs.probit function.
