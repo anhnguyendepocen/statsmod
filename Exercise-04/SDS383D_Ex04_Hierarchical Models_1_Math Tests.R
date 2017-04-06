@@ -13,7 +13,7 @@ data = read.csv('Data/mathtest.csv')
 attach(data)
 
 #Read in functions.
-source('RCode/SDS383D_Ex04_Hierarchical Models_FUNCTIONS.R')
+source('RCode/SDS383D_Ex04_Hierarchical Models_FUNCTIONS_1_Math Test (Hier Model).R')
 
 ###		y_ij = score for jth student at school i.
 ###		theta_i = underlying mean test score for school i.

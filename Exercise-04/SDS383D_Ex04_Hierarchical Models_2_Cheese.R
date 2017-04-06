@@ -20,7 +20,7 @@ data = read.csv('Data/cheese.csv')
 attach(data)
 
 #Read in functions.
-source('RCode/SDS383D_Ex04_Hierarchical Models_FUNCTIONS.R')
+source('RCode/SDS383D_Ex04_Hierarchical Models_FUNCTIONS_2_Cheese (Hier Linear Model).R')
 
 #Add log price and log volume variables.
 data$logP = log(data$price)
