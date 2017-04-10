@@ -63,33 +63,24 @@ for (i in 1:nrow(X)){
 #================================================================
 
 # This model uses empirical Bayes; errors estimated from data.
-
+data$wt.sc = scale(data$weight)
 
 #Hierarchical augmented probit model; allows intercept to change between states.
 #	Includes ad*price interaction.
-hlm = lmer(bush ~ edu + age + female + black + weight + (1|state), data=data)
+hlm = glmer(bush ~ edu + age + female + black  + wt.sc + (1|state), data=data, family='binomial')
 summary(hlm)
 
-#Plot confidence intervals for fixed coefficients.
-CI = confint(hlm)[-c(1:2),]
-CI = cbind(CI,'50%'=rowMeans(CI))
+CI = confint(hlm1)[-c(1:2),]
+CI = cbind(CI,'50%'=rowMeans(CI2))
 
+#Plot confidence intervals for fixed coefficients.
 pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/lmer_CI_plot.pdf',height=8,width=16)
 plotCI(x=CI[,3],li=CI[,1],ui=CI[,2],xlab='Coefficients',ylab='',main='Coefficient Estimates from LMER',xaxt='n')
-axis(1,at=1:length(colnames(X)),labels=colnames(X),cex.axis=.6)
+axis(1,at=1:length(colnames(X)[-1]),labels=colnames(X)[-1],cex.axis=.75)
+abline(h=0,lty=2,col='red')
 dev.off()
 
-#Plot confidence intervals for variance components.
-CI = matrix(0,2,3)
-rownames(CI) = c('state','residual')
-colnames(CI) = c('2.5%','50%','97.5%')
-CI[1,] = c(0.00917 + c(-1,1) * 1.96 * 0.09576 , 0.00917)
-CI[2,] = c(0.22848 + c(-1,1) * 1.96 * 0.47800 , 0.22848)
-
-pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/lmer_CI_plot_vars.pdf')
-plotCI(x=CI[,3],li=CI[,1],ui=CI[,2],xlab='Coefficients',ylab='',main='Variance Estimates from LMER',xaxt='n')
-axis(1,at=1:2,labels=c('State Variance','Residual Variance'),cex.axis=1)
-dev.off()
+#Variance for state = 0.1732
 
 #================================================================
 # Run Gibbs Sampler =============================================
