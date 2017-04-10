@@ -11,6 +11,7 @@ library(mosaic)
 library(lme4)
 library(dplyr)
 library(plotrix)	#For plotting CIs.
+library(truncnorm)
 
 #Set working directory
 setwd('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/')
@@ -40,7 +41,7 @@ data$age = factor(data$age, levels = c('18to29','30to44','45to64','65plus'))
 
 #Set up responses vector and design matrix.
 y = data$bush
-X = model.matrix(bush ~ edu + age + female + black + weight,data)
+X = model.matrix(bush ~ edu + age + female + black,data)
 idx = cbind.data.frame(state.name = data$state,state=as.numeric(data$state))
 
 #Set up marginal effects coding for ordinal variables.
@@ -63,11 +64,10 @@ for (i in 1:nrow(X)){
 #================================================================
 
 # This model uses empirical Bayes; errors estimated from data.
-data$wt.sc = scale(data$weight)
 
 #Hierarchical augmented probit model; allows intercept to change between states.
 #	Includes ad*price interaction.
-hlm = glmer(bush ~ edu + age + female + black  + wt.sc + (1|state), data=data, family='binomial')
+hlm = glmer(bush ~ edu + age + female + black  + (1|state), data=data, family='binomial')
 summary(hlm)
 
 CI = confint(hlm)[-c(1:2),]
@@ -90,7 +90,7 @@ dev.off()
 p = ncol(X)
 
 #Since Beta fixed, no prior; estimating based on OLS coefficients.
-ols = lm(bush ~ edu + age + female + black + weight,data)
+ols = lm(bush ~ edu + age + female + black,data)
 muB = ols$coef
 Sigma = vcov(ols)
 
@@ -154,18 +154,22 @@ CI = as.matrix(cbind(lb,m=py.state.mean,ub))
 pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/State_BCIntervals.pdf',width=20,height=10)
 plotCI(x=CI[,2],li=CI[,1],ui=CI[,3],xlab='Coefficients',ylab='',main='Bayesian Credible Intervals by State for P(Supporting Bush)',xaxt='n')
 axis(1,at=seq(1:s),labels=states.list,cex.axis=.5)
+abline(h=0,lty=2,col='red')
 dev.off()
 
 #PLOT 2: Does education affect probability?
+py = output$py.i.pm
 py.all = unlist(py)
 
 pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/edu_boxplot.pdf',width=20,height=10)
 boxplot(unlist(py.all)~data$edu,main='Probability of Supporting Bush by Education Level',ylab='P(Supporting Bush)')
+abline(h=0,lty=2,col='red')
 dev.off()
 
 #PLOT 3: Does age affect probability?
 pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/age_boxplot.pdf',width=20,height=10)
 boxplot(unlist(py.all)~data$age,main='Probability of Supporting Bush by Age Group',ylab='P(Supporting Bush)')
+abline(h=0,lty=2,col='red')
 dev.off()
 
 #PLOT 4: Do race and gender affect probability?
@@ -173,12 +177,5 @@ pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figure
 boxplot(unlist(py.all)~data$female + data$black,main='Probability of Supporting Bush by Race and Gender',
 	ylab='P(Supporting Bush)',xaxt='n')
 axis(1,at=1:4,labels=c("M-White","F-White","M-Black","F-Black"))
+abline(h=0,lty=2,col='red')
 dev.off()
-
-#PLOT 5: Does weight affect probability?
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/weight.pdf',width=20,height=10)
-wt.idx = order(data$weight)
-plot(data$weight[wt.idx],py.all[wt.idx],pch=1,col='blue',xlab='Weight',ylab='P(Supporting Bush)',	
-	main='Probability of Supporting Bush by Weight')
-dev.off()
-
