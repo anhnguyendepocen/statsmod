@@ -1,6 +1,6 @@
 #Stats Modeling 2
 #Exercise 4
-#Polls - Augmented Probit Hierarchical Model (Albert & Chib 1993)
+#Polls - Gene Expression Over Time
 
 #================================================================
 # Setup =========================================================
@@ -11,35 +11,44 @@ library(mosaic)
 library(lme4)
 library(dplyr)
 library(plotrix)	#For plotting CIs.
+library(lattice)
 
 #Set working directory
 setwd('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/')
 
 #Read in data.
-data = read.csv('Data/polls.csv')
+data = read.csv('Data/droslong.csv')
 attach(data)
 
 #Read in functions.
 source('RCode/SDS383D_Ex04_Hierarchical Models_FUNCTIONS_3_Polls (Augmented Probit).R')
 
-#Remove missing observations (178 rows out of 2193).
-#Note: Could use Gibbs to sample and fill in missing y obs, but did not here.
-data = data[complete.cases(data),]
+#================================================================
+# Exploratory ===================================================
+#================================================================
 
-#Order data by state.
-data = data[with(data,order(data$state)), ]
-rownames(data) = 1:nrow(data)
+#Number of observations in each group.
+xtabs( ~ factor(group), data=data)
 
-#List and number of unique states.
-states.list = sort(unique(data$state))
-s = length(states.list)
+#Number of each obs of each gene in each group.
+xtabs (~ factor(label) + factor(group), data=data)
 
-#Set edu=NoHS and age=18to29 as the reference levels.
-data$edu = factor(data$edu, levels = c('NoHS','HS','SomeColl','Bacc'))
-data$age = factor(data$age, levels = c('18to29','30to44','45to64','65plus'))
+#How each gene varies over time.
+pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Gene_Expression/Exploratory_GenesOverTime.pdf')
+xyplot(log2exp ~ time | gene, data = data,main='Genes Over Time')
+dev.off()
+
+#How each group varies over time.
+pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Gene_Expression/Exploratory_GroupsOverTime.pdf')
+xyplot(log2exp ~ time | group, data = data, main='Groups Over Time')
+dev.off()
+
 
 #Set up responses vector and design matrix.
-y = data$bush
+y = data$log2exp
+
+
+
 X = model.matrix(bush ~ edu + age + female + black + weight,data)
 idx = cbind.data.frame(state.name = data$state,state=as.numeric(data$state))
 
@@ -70,8 +79,8 @@ data$wt.sc = scale(data$weight)
 hlm = glmer(bush ~ edu + age + female + black  + wt.sc + (1|state), data=data, family='binomial')
 summary(hlm)
 
-CI = confint(hlm)[-c(1:2),]
-CI = cbind(CI,'50%'=rowMeans(CI))
+CI = confint(hlm1)[-c(1:2),]
+CI = cbind(CI,'50%'=rowMeans(CI2))
 
 #Plot confidence intervals for fixed coefficients.
 pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/lmer_CI_plot.pdf',height=8,width=16)

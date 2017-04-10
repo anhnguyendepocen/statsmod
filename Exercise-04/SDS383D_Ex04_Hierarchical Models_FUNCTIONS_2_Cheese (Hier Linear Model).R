@@ -26,7 +26,6 @@ gibbs.cheese = function(y,X,idx,muB,V,C,d,iter=11000,burn=1000,thin=2){
 	#			sig.sq.post = vector of posterior sig2.sq samples
 	#			muSig.post = vector of posterior (mu,Sigma) IW draws.
 	#-------------------------------------------------------------
-	require(MCMCpack)							#Sample from Inverse Wishart.
 	require(mvtnorm)							#Sample from Multivariate Normal.
 	require(MASS)								#Generalized inverse.
 	
@@ -121,7 +120,7 @@ gibbs.cheese = function(y,X,idx,muB,V,C,d,iter=11000,burn=1000,thin=2){
 		dn = d + s
 		Cn = C + SS.Sigma
 		
-		Sigma[,,k] = riwish(dn,Cn)
+		Sigma[,,k] = rwishart(dn,Cn)
 	} #End Gibbs sampler loop.
 	
 	#Burn beginning observations.
