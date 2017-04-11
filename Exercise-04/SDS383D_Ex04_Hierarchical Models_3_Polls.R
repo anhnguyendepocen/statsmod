@@ -10,8 +10,9 @@ rm(list=ls())
 library(mosaic)
 library(lme4)
 library(dplyr)
-library(plotrix)	#For plotting CIs.
-library(truncnorm)
+library(plotrix)		#For plotting CIs.
+library(truncnorm)		#For sampling truncated normal.
+library(matrixStats)	#For colSds.
 
 #Set working directory
 setwd('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/')
@@ -143,39 +144,110 @@ sum(y!=y.pred)/length(y)
 
 #Goal: How demographics relate to probability of supporting Bush, ie P(Y_ij = 1).
 
-#Bayesian Credible Intervals.
+#----------------------------------------------------------------
+### PLOT 1: Bayesian Credible Intervals by State.
+
+#Calculate means and sds of posterior probabilities of supporting Bush, for each state.
 py.state.mean = unlist(lapply(output$py.i,mean))
 py.state.sd = unlist(lapply(output$py.i,sd))
 
+#Set up BCI bounds.
 lb = py.state.mean - 1.96 * py.state.sd
 ub = py.state.mean + 1.96 * py.state.sd
 CI = as.matrix(cbind(lb,m=py.state.mean,ub))
 
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/State_BCIntervals.pdf',width=20,height=10)
-plotCI(x=CI[,2],li=CI[,1],ui=CI[,3],xlab='Coefficients',ylab='',main='Bayesian Credible Intervals by State for P(Supporting Bush)',xaxt='n')
-axis(1,at=seq(1:s),labels=states.list,cex.axis=.5)
-abline(h=0,lty=2,col='red')
+#Set up color vector for posterior mean above/below 50%.
+state.col = ifelse(py.state.mean>=.5,'red','blue')
+
+#Save plot to pdf file.
+pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/State_BCI.pdf',width=20,height=10)
+plotCI(x=CI[,2],li=CI[,1],ui=CI[,3],xlab='Coefficients',ylab='',col=state.col,
+	,main='Bayesian Credible Intervals by State for P(Bush)',xaxt='n')
+axis(1,at=seq(1:s),labels=states.list,cex.axis=.65)
+abline(h=.5,lty=2,col='darkgrey')
 dev.off()
 
-#PLOT 2: Does education affect probability?
-py = output$py.i.pm
-py.all = unlist(py)
+#----------------------------------------------------------------
+### PLOT 2: Bayesian Credible Intervals by Education.  Does education affect probability?
 
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/edu_boxplot.pdf',width=20,height=10)
-boxplot(unlist(py.all)~data$edu,main='Probability of Supporting Bush by Education Level',ylab='P(Supporting Bush)')
-abline(h=0,lty=2,col='red')
+#Calculate means and sds of posterior probabilities of supporting Bush, for each edu level above HS.
+py.all = unlist(output$py.i.pm)
+py.edu.mean = colMeans(py.all*X[,2:4])
+py.edu.sd = colSds(py.all*X[,2:4])
+
+#Set up BCI bounds.
+lb = py.edu.mean - 1.96 * py.edu.sd
+ub = py.edu.mean + 1.96 * py.edu.sd
+CI = as.matrix(cbind(lb,m=py.edu.mean,ub))
+
+#Set up color vector for posterior mean above/below 50%.
+edu.col = ifelse(py.edu.mean>=.5,'red','blue')
+edu.list = colnames(X[,2:4])
+
+#Save plot to pdf file.
+pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/edu_BCI.pdf',width=10,height=10)
+plotCI(x=CI[,2],li=CI[,1],ui=CI[,3],xlab='Coefficients',ylab='',col=edu.col,
+	,main='BC Intervals by Ed Level Above NoHS for P(Bush)',xaxt='n')
+axis(1,at=seq(1:3),labels=edu.list,cex.axis=1)
+abline(h=.5,lty=2,col='darkgrey')
 dev.off()
 
-#PLOT 3: Does age affect probability?
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/age_boxplot.pdf',width=20,height=10)
-boxplot(unlist(py.all)~data$age,main='Probability of Supporting Bush by Age Group',ylab='P(Supporting Bush)')
-abline(h=0,lty=2,col='red')
+#----------------------------------------------------------------
+### PLOT 3: Does age affect probability?
+
+#Calculate posterior means and sds for P(Bush) for age levels above 18-29.
+py.all = unlist(output$py.i.pm)
+py.age.mean = colMeans(py.all*X[,5:7])
+py.age.sd = colSds(py.all*X[,5:7])
+
+#Set up BCI bounds.
+lb = py.age.mean - 1.96 * py.age.sd
+ub = py.age.mean + 1.96 * py.age.sd
+CI = as.matrix(cbind(lb,m=py.age.mean,ub))
+
+#Set up color vector for posterior mean above/below 50%.
+age.col = ifelse(py.age.mean>=.5,'red','blue')
+age.list = colnames(X[,5:7])
+
+#Save plot to pdf file.
+pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/age_BCI.pdf',width=10,height=10)
+plotCI(x=CI[,2],li=CI[,1],ui=CI[,3],xlab='Coefficients',ylab='',col=age.col,
+	,main='BC Intervals by Age Level Above 18-29 for P(Bush)',xaxt='n')
+axis(1,at=seq(1:3),labels=age.list,cex.axis=1)
+abline(h=.5,lty=2,col='darkgrey')
 dev.off()
 
-#PLOT 4: Do race and gender affect probability?
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/race_gender_boxplot.pdf',width=20,height=10)
-boxplot(unlist(py.all)~data$female + data$black,main='Probability of Supporting Bush by Race and Gender',
-	ylab='P(Supporting Bush)',xaxt='n')
-axis(1,at=1:4,labels=c("M-White","F-White","M-Black","F-Black"))
-abline(h=0,lty=2,col='red')
+#----------------------------------------------------------------
+### PLOT 4: Do race and gender affect probability?
+
+#Calculate posterior means and sds for each race/gender combo.
+py.all = unlist(output$py.i.pm)
+py.rg.mean = c(
+	mean(py.all[data$female==0 & data$black==0]),	#White Male
+	mean(py.all[data$female==1 & data$black==0]),	#White Female
+	mean(py.all[data$female==0 & data$black==1]),	#Black Male
+	mean(py.all[data$female==1 & data$black==1]))	#Black Female
+
+py.rg.sd = c(
+	sd(py.all[data$female==0 & data$black==0]),		#White Male
+	sd(py.all[data$female==1 & data$black==0]),		#White Female
+	sd(py.all[data$female==0 & data$black==1]),		#Black Male
+	sd(py.all[data$female==1 & data$black==1]))		#Black Female
+
+#Set up BCI bounds.
+lb = py.rg.mean - 1.96 * py.rg.sd
+ub = py.rg.mean + 1.96 * py.rg.sd
+CI = as.matrix(cbind(lb,m=py.rg.mean,ub))
+
+#Set up color vector for posterior mean above/below 50%.
+rg.col = ifelse(py.rg.mean>=.5,'red','blue')
+rg.list = c('Wh-M','Wh-F','B-M','B-F')
+
+#Save plot to pdf file.
+pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/race_gender_BCI.pdf',width=10,height=10)
+plotCI(x=CI[,2],li=CI[,1],ui=CI[,3],xlab='Coefficients',ylab='',col=rg.col,
+	,main='BC Intervals by Race and Gender for P(Bush)',xaxt='n')
+axis(1,at=seq(1:4),labels=rg.list,cex.axis=1)
+abline(h=.5,lty=2,col='darkgrey')
 dev.off()
+
