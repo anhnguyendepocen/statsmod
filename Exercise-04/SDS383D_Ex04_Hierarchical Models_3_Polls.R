@@ -147,17 +147,14 @@ sum(y!=y.pred)/length(y)
 #----------------------------------------------------------------
 ### PLOT 1: Bayesian Credible Intervals by State.
 
-#Calculate means and sds of posterior probabilities of supporting Bush, for each state.
-py.state.mean = unlist(lapply(output$py.i,mean))
-py.state.sd = unlist(lapply(output$py.i,sd))
-
 #Set up BCI bounds.
-lb = py.state.mean - 1.96 * py.state.sd
-ub = py.state.mean + 1.96 * py.state.sd
-CI = as.matrix(cbind(lb,m=py.state.mean,ub))
+lb = unlist(lapply(output$py.i, function(x) quantile(x,.025)))
+ub = unlist(lapply(output$py.i, function(x) quantile(x,.975)))
+median = (ub+lb)/2
+CI = as.matrix(cbind(lb,m=median,ub))
 
 #Set up color vector for posterior mean above/below 50%.
-state.col = ifelse(py.state.mean>=.5,'red','blue')
+state.col = ifelse(median>=.5,'red','blue')
 
 #Save plot to pdf file.
 pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/State_BCI.pdf',width=20,height=10)
@@ -172,16 +169,14 @@ dev.off()
 
 #Calculate means and sds of posterior probabilities of supporting Bush, for each edu level above HS.
 py.all = unlist(output$py.i.pm)
-py.edu.mean = colMeans(py.all*X[,2:4])
-py.edu.sd = colSds(py.all*X[,2:4])
 
-#Set up BCI bounds.
-lb = py.edu.mean - 1.96 * py.edu.sd
-ub = py.edu.mean + 1.96 * py.edu.sd
-CI = as.matrix(cbind(lb,m=py.edu.mean,ub))
+lb = apply(py.all * X[,2:4], 2, function(x) quantile(x,.025))
+ub = apply(py.all * X[,2:4], 2, function(x) quantile(x,.975))
+median = (ub+lb)/2
+CI = as.matrix(cbind(lb,m=median,ub))
 
 #Set up color vector for posterior mean above/below 50%.
-edu.col = ifelse(py.edu.mean>=.5,'red','blue')
+edu.col = ifelse(median>=.5,'red','blue')
 edu.list = colnames(X[,2:4])
 
 #Save plot to pdf file.
@@ -197,16 +192,13 @@ dev.off()
 
 #Calculate posterior means and sds for P(Bush) for age levels above 18-29.
 py.all = unlist(output$py.i.pm)
-py.age.mean = colMeans(py.all*X[,5:7])
-py.age.sd = colSds(py.all*X[,5:7])
-
-#Set up BCI bounds.
-lb = py.age.mean - 1.96 * py.age.sd
-ub = py.age.mean + 1.96 * py.age.sd
-CI = as.matrix(cbind(lb,m=py.age.mean,ub))
+lb = apply(py.all * X[,5:7], 2, function(x) quantile(x,.025))
+ub = apply(py.all * X[,5:7], 2, function(x) quantile(x,.975))
+median = (ub+lb)/2
+CI = as.matrix(cbind(lb,m=median,ub))
 
 #Set up color vector for posterior mean above/below 50%.
-age.col = ifelse(py.age.mean>=.5,'red','blue')
+age.col = ifelse(median>=.5,'red','blue')
 age.list = colnames(X[,5:7])
 
 #Save plot to pdf file.
@@ -222,25 +214,22 @@ dev.off()
 
 #Calculate posterior means and sds for each race/gender combo.
 py.all = unlist(output$py.i.pm)
-py.rg.mean = c(
-	mean(py.all[data$female==0 & data$black==0]),	#White Male
-	mean(py.all[data$female==1 & data$black==0]),	#White Female
-	mean(py.all[data$female==0 & data$black==1]),	#Black Male
-	mean(py.all[data$female==1 & data$black==1]))	#Black Female
 
-py.rg.sd = c(
-	sd(py.all[data$female==0 & data$black==0]),		#White Male
-	sd(py.all[data$female==1 & data$black==0]),		#White Female
-	sd(py.all[data$female==0 & data$black==1]),		#Black Male
-	sd(py.all[data$female==1 & data$black==1]))		#Black Female
+lb = c(quantile(py.all[data$female==0 & data$black==0],.025),	#White Male
+	   quantile(py.all[data$female==1 & data$black==0],.025),	#White Female
+	   quantile(py.all[data$female==0 & data$black==1],.025),	#Black Male
+	   quantile(py.all[data$female==1 & data$black==1],.025))	#Black Female
 
-#Set up BCI bounds.
-lb = py.rg.mean - 1.96 * py.rg.sd
-ub = py.rg.mean + 1.96 * py.rg.sd
-CI = as.matrix(cbind(lb,m=py.rg.mean,ub))
+ub = c(quantile(py.all[data$female==0 & data$black==0],.975),	#White Male
+	   quantile(py.all[data$female==1 & data$black==0],.975),	#White Female
+	   quantile(py.all[data$female==0 & data$black==1],.975),	#Black Male
+	   quantile(py.all[data$female==1 & data$black==1],.975))	#Black Female
+
+median = (ub+lb)/2
+CI = as.matrix(cbind(lb,m=median,ub))
 
 #Set up color vector for posterior mean above/below 50%.
-rg.col = ifelse(py.rg.mean>=.5,'red','blue')
+rg.col = ifelse(median>=.5,'red','blue')
 rg.list = c('Wh-M','Wh-F','B-M','B-F')
 
 #Save plot to pdf file.
