@@ -7,25 +7,29 @@
 #================================================================
 rm(list=ls())
 
-library(mosaic)
-library(lme4)
-library(dplyr)
-library(plotrix)	#For plotting CIs.
+#library(mosaic)
+#library(lme4)
+#library(dplyr)
+#library(plotrix)	#For plotting CIs.
 library(lattice)
+library(mvtnorm)	#For sampling multivariate normals, and for ll function.
 
 #Set working directory
 setwd('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/')
 
 #Read in data.
 data = read.csv('Data/droslong.csv')
-attach(data)
 
 #Read in functions.
-source('RCode/SDS383D_Ex04_Hierarchical Models_FUNCTIONS_3_Polls (Augmented Probit).R')
+source('RCode/SDS383D_Ex04_Hierarchical Models_FUNCTIONS_4_Genes (Hierarchical GP Regression).R')
+
 
 #================================================================
 # Exploratory ===================================================
 #================================================================
+
+#Summarize everything.
+xtabs( ~ factor(group) + factor(gene) + factor(replicate), data=data)
 
 #Number of observations in each group.
 xtabs( ~ factor(group), data=data)
@@ -43,151 +47,201 @@ pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Gen
 xyplot(log2exp ~ time | group, data = data, main='Groups Over Time')
 dev.off()
 
+#================================================================
+# Sort and Organize Data ========================================
+#================================================================
 
-#Set up responses vector and design matrix.
-y = data$log2exp
+#Sort data.
+data = data[with(data, order(group, gene, replicate, time)),]
+rownames(data) = 1:nrow(data)
 
+#Cleaner version of data; remove unneeded cols.
+Y = data[,c('group','gene','replicate','time','log2exp')]
 
+#Preview data.
+head(Y)
 
-X = model.matrix(bush ~ edu + age + female + black + weight,data)
-idx = cbind.data.frame(state.name = data$state,state=as.numeric(data$state))
+#================================================================
+# Optimize Parameters Using Max Lhood (Nelder-Mead) =============
+#================================================================
 
-#Set up marginal effects coding for ordinal variables.
-#HS : NoHS = 1, HS = 1, SomeColl = 0, Bacc = 0
-#30-44: 19to29 = 1, 30to44=1, 45to60=0, 60plus=0
-#Then SomeColl is marginal effect of some college beyond HS.
+#Optimize a set of parameters for each group.  Same initial values for all groups.  Log scale.
+ls.f 	= -2
+var.f 	= -2
+ls.g 	= 1
+var.g 	= 1
+ls.h 	= 2
+var.h 	= 2
+sig.sq 	= -2
 
-for (i in 1:nrow(X)){
-	#Adjust edu.
-	if (X[i,4] == 1) X[i,3] = X[i,2] = 1
-	if (X[i,3] == 1) X[i,2] = 1
+init.par = c(ls.f,var.f,ls.g,var.g,ls.h,var.h,sig.sq)
+
+#Optimize parameters for each group.
+myopt = opt.param(Y,init.par)
+
+#================================================================
+# Predict Group, Gene and Rep Profiles ==========================
+#================================================================
+
+t.pred=seq(0.5, 12.5, length.out = 200)
+myPred = hgp.predict(Y, params=myopt, t.pred)
+
+#================================================================
+# Plot Group Profiles ===========================================
+#================================================================
+
+h.mean = myPred$h.mean
+h.lb = myPred$h.lb
+h.ub = myPred$h.ub
+
+gene.cols = rainbow(14)
+
+pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Gene_Expression/Group_Pred_Profiles.pdf',width=15,height=5)
+
+par(mfrow=c(1,3))
+
+for (i in 1:3){
+	#Extract data to plot.
+	grp = colnames(h.mean)[i]
+	Yi  = Y[Y$group==grp,]
+	t = Yi$time
+	y = Yi$log2exp
 	
-	#Adjust age.
-	if(X[i,7]==1) X[i,6] = X[i,5] = 1
-	if(X[i,6]==1) X[i,5] = 1
+	#Scatterplot of genes in group.
+	plot(t, y, col = gene.cols[Yi$gene],main = paste('Profile for ',grp), pch=19, 
+		ylim=c(min(h.lb[,i])-.01, max(h.ub[,i]+.01)),
+		xlab='time',ylab='log-squared expression level')
+	
+	#Shade CI region.
+	polygon(c(t.pred,rev(t.pred)), c(h.ub[,i], rev(h.lb[,i])), col='lightgrey', border=NA)
+	
+	#Add posterior mean and CI for group.
+	lines(t.pred,h.mean[,i],lwd=2,col='black')
+	lines(t.pred,h.lb[,i],lwd=2,lty=1,col='lightgrey')
+	lines(t.pred,h.ub[,i],lwd=2,lty=1,col='lightgrey')
+	
+	#Re-add points (shaded CI covers them up).
+	points(t, y, col = gene.cols[Yi$gene], pch=19)
+}
+dev.off()
+
+#================================================================
+# Plot Gene Profiles for each group =============================
+#================================================================
+
+g.mean = myPred$g.mean
+g.lb = myPred$g.lb
+g.ub = myPred$g.ub
+
+rep.cols = c('firebrick3','forestgreen','darkblue')
+
+for (i in 1:3){
+	
+	#Extract data to plot.
+	grp = colnames(h.mean)[i]
+	Yi  = Y[Y$group==grp,]
+
+	#Genes in group. 
+	genes.i = unique(Yi$gene)
+	
+	pdf(trimws(paste('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Gene_Expression/		Gene_Pred_Profiles_',grp,'.pdf',sep='')), width=10,height=10)
+	
+	par(mfrow=c(2,3))
+	
+	#Loop through genes in group.
+	for (j in 1:length(genes.i)){
+		
+		gene = unique(Yi$gene)[j]
+		Yn = Yi[Yi$gene==gene,]
+		t = Yn$time
+		y = Yn$log2exp
+		
+		#Scatterplot of the gene.
+		plot(t, y, col = rep.cols[Yn$replicate],main = paste('Gene Profile: ',gene), pch=19, 
+			ylim=c(min(g.lb[,gene])-.01, max(g.ub[,gene]+.01)),
+			xlab='time',ylab='log-squared expression level')
+		
+		#Shade CI region.
+		polygon(c(t.pred,rev(t.pred)), c(g.ub[,gene], rev(g.lb[,gene])), col='lightgrey', border=NA)
+		
+		#Add posterior mean and CI for group.
+		lines(t.pred,g.mean[,gene],lwd=2,col='black')
+		lines(t.pred,g.lb[,gene],lwd=2,lty=1,col='lightgrey')
+		lines(t.pred,g.ub[,gene],lwd=2,lty=1,col='lightgrey')
+	
+		#Re-add points (shaded CI covers them up).
+		points(t, y, col = rep.cols[Yn$replicate], pch=19)
+	}
+	dev.off()
 }
 
-#================================================================
-# Hierarchical Model: Empirical Bayes (Using lmer) ==============
-#================================================================
-
-# This model uses empirical Bayes; errors estimated from data.
-data$wt.sc = scale(data$weight)
-
-#Hierarchical augmented probit model; allows intercept to change between states.
-#	Includes ad*price interaction.
-hlm = glmer(bush ~ edu + age + female + black  + wt.sc + (1|state), data=data, family='binomial')
-summary(hlm)
-
-CI = confint(hlm1)[-c(1:2),]
-CI = cbind(CI,'50%'=rowMeans(CI2))
-
-#Plot confidence intervals for fixed coefficients.
-pdf('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/lmer_CI_plot.pdf',height=8,width=16)
-plotCI(x=CI[,3],li=CI[,1],ui=CI[,2],xlab='Coefficients',ylab='',main='Coefficient Estimates from LMER',xaxt='n')
-axis(1,at=1:length(colnames(X)[-1]),labels=colnames(X)[-1],cex.axis=.75)
-abline(h=0,lty=2,col='red')
-dev.off()
-
-#Variance for state = 0.1732
 
 #================================================================
-# Run Gibbs Sampler =============================================
+# Plot Gene-Rep Profiles ========================================
 #================================================================
 
-#Set up hyperparameters.
-p = ncol(X)
+f.mean = myPred$f.mean
+f.lb = myPred$f.lb
+f.ub = myPred$f.ub
 
-#Since Beta fixed, no prior; estimating based on OLS coefficients.
-ols = lm(bush ~ edu + age + female + black + weight,data)
-muB = ols$coef
-Sigma = vcov(ols)
+rep.cols = c('firebrick3','forestgreen','darkblue')
 
-#Runs sampler.
-output = gibbs.probit(y,X,idx,muB,Sigma,iter=11000,burn=1000,thin=2)
+for (i in 1:3){
+	
+	#Extract data to plot.
+	grp = colnames(h.mean)[i]
+	Yi  = Y[Y$group==grp,]
 
-#================================================================
-# Trace Plots for MCMC Mixing ===================================
-#================================================================
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/mcmc_trace.pdf',width=20,height=10)
-par(mfrow=c(3,3))
-plot(output$tau.sq,type='l',main='tau.sq')
-plot(output$Beta[1,],type='l',main='Beta')
-plot(output$Beta[2,],type='l',main='Beta')
-plot(output$Beta[3,],type='l',main='Beta')
-plot(output$Beta[4,],type='l',main='Beta')
-plot(output$mu.i[3,],type='l',main='mu.3')
-plot(output$mu.i[10,],type='l',main='mu.10')
-plot(output$mu.i[30,],type='l',main='mu.30')
-plot(output$mu.i[40,],type='l',main='mu.40')
-dev.off()
+	#Genes in group. 
+	genes.i = unique(Yi$gene)
+	
+	#Reps in each gene.
+	reps = unique(Yi$replicate)
+	
+	#Gene-rep combos in each group.
+	gene.rep = paste( rep(genes.i,each=length(reps)), rep(reps,length(genes.i)) )
+	
+	pdf(trimws(paste('/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Gene_Expression/		Gene_Replicate_Profiles_',grp,'.pdf',sep='')), width=10,height=10)
+	
+	nrow = length(genes.i)
+	ncol = length(reps)
+	
+	par(mfrow=c(nrow,ncol))
+	
+	#Loop through genes/replicates in group.
+	for (j in 1:length(genes.i)){
+		
+		for (k in 1:length(reps)){
+			
+			#Extract data for gene/rep combo.
+			gene = genes.i[j]
+			rep = reps[k]
+			gene.rep = colnames(f.mean)[colnames(f.mean)==paste(gene,rep)] #For f.mean lookup.
+			
+			Ynr = Yi[Yi$gene==gene & Yi$replicate==rep,]
+			t = Ynr$time
+			y = Ynr$log2exp
+			
+			#Scatterplot of the gene.
+			plot(t, y, col = rep.cols[Ynr$replicate],main = paste('Gene-Rep Profile: ',gene.rep), pch=19, 
+				ylim=c(min(f.lb[,gene.rep])-.01, max(f.ub[,gene.rep]+.01)),
+				xlab='time',ylab='log-squared expression level')
+		
+			#Shade CI region.
+			polygon(c(t.pred,rev(t.pred)), c(f.ub[,gene.rep], rev(f.lb[,gene.rep])), col='lightgrey', border=NA)
+		
+			#Add posterior mean and CI for group.
+			lines(t.pred,f.mean[,gene.rep],lwd=2,col='black')
+			lines(t.pred,f.lb[,gene.rep],lwd=2,lty=1,col='lightgrey')
+			lines(t.pred,f.ub[,gene.rep],lwd=2,lty=1,col='lightgrey')
+	
+			#Re-add points (shaded CI covers them up).
+			points(t, y, col = rep.cols[Ynr$replicate], pch=19)
+		
+		} #End replicate loop.
+	} #End gene loop.
+	
+	dev.off()
+}
 
-#Traces of mu.i + Beta[1]
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/mcmc_trace_intercepts.pdf',width=20,height=10)
-par(mfrow=c(3,1))
-plot(output$Beta[1,] + output$mu.i[1,],type='l',main='Intercept for State 1')
-plot(output$Beta[1,] + output$mu.i[2,],type='l',main='Intercept for State 2')
-plot(output$Beta[1,] + output$mu.i[3,],type='l',main='Intercept for State 3')
-dev.off()
-
-#================================================================
-# Check Prediction Error ========================================
-#================================================================
-
-#(Since classifier, look at prediction error.)
-
-#Generate Y values using y_{ij} ~ Bernoulli(p_{ij}) where p_{ij} are posterior means.
-#Since sorted data by state, can unlist.
-y.pred = output$y.pred
-
-#Show table of y actual versus predicted.
-table(y,y.pred)
-
-#Error rate.
-sum(y!=y.pred)/length(y)
-
-#================================================================
-# Plot Demographic Results ======================================
-#================================================================
-
-#Goal: How demographics relate to probability of supporting Bush, ie P(Y_ij = 1).
-
-#Bayesian Credible Intervals.
-py.state.mean = unlist(lapply(output$py.i,mean))
-py.state.sd = unlist(lapply(output$py.i,sd))
-
-lb = py.state.mean - 1.96 * py.state.sd
-ub = py.state.mean + 1.96 * py.state.sd
-CI = as.matrix(cbind(lb,m=py.state.mean,ub))
-
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/State_BCIntervals.pdf',width=20,height=10)
-plotCI(x=CI[,2],li=CI[,1],ui=CI[,3],xlab='Coefficients',ylab='',main='Bayesian Credible Intervals by State for P(Supporting Bush)',xaxt='n')
-axis(1,at=seq(1:s),labels=states.list,cex.axis=.5)
-dev.off()
-
-#PLOT 2: Does education affect probability?
-py.all = unlist(py)
-
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/edu_boxplot.pdf',width=20,height=10)
-boxplot(unlist(py.all)~data$edu,main='Probability of Supporting Bush by Education Level',ylab='P(Supporting Bush)')
-dev.off()
-
-#PLOT 3: Does age affect probability?
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/age_boxplot.pdf',width=20,height=10)
-boxplot(unlist(py.all)~data$age,main='Probability of Supporting Bush by Age Group',ylab='P(Supporting Bush)')
-dev.off()
-
-#PLOT 4: Do race and gender affect probability?
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/race_gender_boxplot.pdf',width=20,height=10)
-boxplot(unlist(py.all)~data$female + data$black,main='Probability of Supporting Bush by Race and Gender',
-	ylab='P(Supporting Bush)',xaxt='n')
-axis(1,at=1:4,labels=c("M-White","F-White","M-Black","F-Black"))
-dev.off()
-
-#PLOT 5: Does weight affect probability?
-pdf(file='/Users/jennstarling/UTAustin/2017S_Stats Modeling 2/Exercise-04/Figures/Probit/weight.pdf',width=20,height=10)
-wt.idx = order(data$weight)
-plot(data$weight[wt.idx],py.all[wt.idx],pch=1,col='blue',xlab='Weight',ylab='P(Supporting Bush)',	
-	main='Probability of Supporting Bush by Weight')
-dev.off()
 
